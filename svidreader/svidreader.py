@@ -5,7 +5,10 @@ from ccvtools import rawio
 
 class SVidReader:
     def __init__(self, video, calc_hashes=False, hash_iterator=iter):
+        video = str(video)
+
         self.video = video
+        self.vprops = []
         self.hashes = []
         self.last_frame = -1
         self.has_issues = False
@@ -15,8 +18,8 @@ class SVidReader:
         if video[-4:] == '.ccv':
             self.plugin = None
 
-        self.n_frames = iio.improps(video, plugin=self.plugin).shape[0]
-        print(self.n_frames)
+        self.vprops = iio.improps(video, plugin=self.plugin)
+        self.n_frames = self.vprops.shape[0]
 
         self.reader = iio.imopen(video, "r", plugin=self.plugin)
 
@@ -57,14 +60,14 @@ class SVidReader:
 
         tries = 0
         while imghash != fr_hash:
+            cur_fr_idx = self.hashes.index(imghash)
             print(f"SVidReader: Wanted {fr_idx}, tryed {requ_idx}, got {cur_fr_idx},", end="")
             self.has_issues = True
-            if tries>5:
+            if tries > 5:
                 print("quitting")
                 raise FrameNotFoundError()
             tries += 1
 
-            cur_fr_idx = self.hashes.index(imghash)
             requ_idx = requ_idx + fr_idx - cur_fr_idx
             print(f"try {requ_idx}")
 
@@ -74,16 +77,19 @@ class SVidReader:
         return img
 
     def improps(self):
-        return iio.improps(self.video, plugin=self.plugin)
+        return self.vprops
 
     def get_meta_data(self, fr_idx=0):
-        return self.improps()
+        mdata = {
+            'nFrames': self.n_frames
+        }
+        return mdata
 
     def __iter__(self):
         return self
 
     def __next__(self):
-        if (self.frame_idx+1) < self.n_frames:
+        if (self.frame_idx + 1) < self.n_frames:
             self.frame_idx += 1
             return self.get_data(self.frame_idx)
         else:
@@ -91,7 +97,7 @@ class SVidReader:
             raise StopIteration
 
     def __len__(self):
-        return len(self.hashes)
+        return self.n_frames
 
 
 class FrameNotFoundError(Exception):
