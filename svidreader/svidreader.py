@@ -19,7 +19,9 @@ class SVidReader:
             self.plugin = None
 
         self.vprops = iio.improps(video, plugin=self.plugin)
+        self.mdata = iio.immeta(video, plugin=self.plugin)
         self.n_frames = self.vprops.shape[0]
+        self.mdata['num_frames'] = self.n_frames
 
         self.reader = iio.imopen(video, "r", plugin=self.plugin)
 
@@ -79,11 +81,8 @@ class SVidReader:
     def improps(self):
         return self.vprops
 
-    def get_meta_data(self, fr_idx=0):
-        mdata = {
-            'nFrames': self.n_frames
-        }
-        return mdata
+    def get_meta_data(self):
+        return self.mdata
 
     def __iter__(self):
         return self
