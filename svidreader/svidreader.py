@@ -1,10 +1,11 @@
 import hashlib
 import imageio.v3 as iio
+from svidreader.imagecache import ImageCache
 from ccvtools import rawio
 
 
 class SVidReader:
-    def __init__(self, video, calc_hashes=False, hash_iterator=iter):
+    def __init__(self, video, calc_hashes=False, hash_iterator=iter, cache=None):
         video = str(video)
 
         self.video = video
@@ -32,6 +33,14 @@ class SVidReader:
                                                 thread_count=16
                                                 ), total=self.n_frames):
                 self.hashes.append(hashlib.md5(img).hexdigest())
+
+
+        if cache is None:
+            self.reader = ImageCache(self.reader, self.n_frames)
+        elif cache != False:
+            cache.reader = reader
+            self.reader = cache
+
 
     def __enter__(self):
         return self
