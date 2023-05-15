@@ -125,14 +125,24 @@ class ImageCache:
 
 
     def preload(self, index):
+        with self.rlock:
+             if index in self.cached:
+                return
         self.ptp.submit(lambda: self.read_impl(index=index), priority = index)
 
 
-    def read(self,index=None):
+    def get_result_from_future(self, future):
+        res = future.result()
+        res.last_used = self.usage_counter
+        self.usage_counter += 1
+        return res.data
+
+
+    def read(self,index=None,blocking=True):
         with self.rlock:
             res = self.cached.get(index)
             if res is not None:
-                for i in range(max(index - self.num_preload,0), min(index + self.num_preload,self.n_frames), 1):
+                for i in range(max(index - self.num_preload,0), min(index + self.num_preload,self.n_frames - 1), 1):
                     self.preload(index = i)
                 res.last_used = self.usage_counter
                 self.usage_counter += 1
@@ -141,7 +151,6 @@ class ImageCache:
         future = self.ptp.submit(lambda : self.read_impl(index), priority = index - 1000000)
         for i in range(max(index - self.num_preload,0), index + self.num_preload, 1):
             self.preload(i)
-        res = future.result()
-        res.last_used = self.usage_counter
-        self.usage_counter += 1
-        return res.data
+        if blocking:
+            return self.get_result_from_future(future)
+        future.add_done_callback(lambda : self.get_result_from_future(future))
