@@ -21,9 +21,9 @@ class BgrToGray:
     def close(self):
         self.reader.close()
 
-    def get_data(self, fr_idx):
-        img = self.reader.get_data(fr_idx // 3)
-        return img[:,:,fr_idx % 3]
+    def read(self, index):
+        img = self.reader.read(index=index // 3)
+        return img[:,:,index % 3]
 
     def improps(self):
         return self.reader.improps()
@@ -37,7 +37,7 @@ class BgrToGray:
     def __next__(self):
         if (self.frame_idx + 1) < self.n_frames:
             self.frame_idx += 1
-            return self.get_data(self.frame_idx)
+            return self.read(self.frame_idx)
         else:
             print("Reached end")
             raise StopIteration
@@ -62,8 +62,8 @@ class FrameDifference:
     def close(self):
         self.reader.close()
 
-    def get_data(self, fr_idx):
-        return self.reader.get_data(fr_idx + 1) - self.reader.get_data(fr_idx)
+    def read(self, index):
+        return 128 + self.reader.read(index=index + 1) - self.reader.read(index=index)
 
     def improps(self):
         return self.reader.improps()
@@ -77,7 +77,7 @@ class FrameDifference:
     def __next__(self):
         if (self.frame_idx + 1) < self.n_frames:
             self.frame_idx += 1
-            return self.get_data(self.frame_idx)
+            return self.read(self.frame_idx)
         else:
             print("Reached end")
             raise StopIteration
