@@ -5,9 +5,9 @@ from ccvtools import rawio
 
 
 class BgrToGray:
-    def __init__(self, reader, n_frames=0):
+    def __init__(self, reader):
         self.reader = reader
-        self.n_frames = n_frames * 3
+        self.n_frames = reader.n_frames * 3
 
     def __enter__(self):
         return self
@@ -46,9 +46,9 @@ class BgrToGray:
         return self.n_frames
 
 class FrameDifference:
-    def __init__(self, reader, n_frames=0):
+    def __init__(self, reader):
         self.reader = reader
-        self.n_frames = n_frames - 1
+        self.n_frames = reader.n_frames - 1
 
     def __enter__(self):
         return self

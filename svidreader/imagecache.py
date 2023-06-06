@@ -154,3 +154,24 @@ class ImageCache:
         if blocking:
             return self.get_result_from_future(future)
         future.add_done_callback(lambda : self.get_result_from_future(future))
+
+
+    def improps(self):
+        return self.reader.improps()
+
+    def get_meta_data(self):
+        return self.reader.get_meta_data()
+
+    def __iter__(self):
+        return self
+
+    def __next__(self):
+        if (self.frame_idx + 1) < self.n_frames:
+            self.frame_idx += 1
+            return self.read(self.frame_idx)
+        else:
+            print("Reached end")
+            raise StopIteration
+
+    def __len__(self):
+        return self.n_frames

@@ -24,13 +24,10 @@ class SVidReader:
             self.video = self.video[0:pipe]
         self.vprops = iio.improps(self.video, plugin=self.plugin)
         self.mdata = iio.immeta(self.video, plugin=self.plugin)
-        self.n_frames = self.vprops.shape[0]
-        self.mdata['num_frames'] = self.n_frames
         self.reader = iio.imopen(self.video, "r", plugin=self.plugin)
-
-
+        self.reader.n_frames = self.vprops.shape[0]
         if cache is None:
-            self.reader = ImageCache(self.reader, self.n_frames)
+            self.reader = ImageCache(self.reader, self.reader.n_frames)
         elif cache != False:
             cache.reader = reader
             self.reader = cache
@@ -38,15 +35,16 @@ class SVidReader:
         if pipe >= 0:
             import svidreader.filtergraph as filtergraph
             self.reader = filtergraph.create_filtergraph_from_string([self.reader],video[pipe+1:len(video)])['out']
-
+        
         if calc_hashes:
             for img in hash_iterator(iio.imiter(video,
                                                 plugin=self.plugin,
                                                 thread_type="FRAME",
                                                 thread_count=16
-                                                ), total=self.n_frames):
+                                                ), total=self.reader.n_frames):
                 self.hashes.append(hashlib.md5(img).hexdigest())
-
+        self.n_frames = self.reader.n_frames
+        self.mdata['num_frames'] = self.n_frames
 
     def __enter__(self):
         return self

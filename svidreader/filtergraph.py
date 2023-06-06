@@ -42,13 +42,13 @@ def create_filtergraph_from_string(inputs, pipeline):
             for opt in line:
                 eqindex = opt.find('=')
                 options[opt[0:eqindex]] = opt[eqindex + 1:len(opt)]
-            
+
             if effectname == 'cache':
                 assert len(inputs) == 1
                 last = ImageCache(inputs[0])
             if effectname == 'bgr2gray':
                 assert len(inputs) == 1
-                last = bgr2gray(inputs[0])
+                last = BgrToGray(inputs[0])
             if effectname == 'tblend':
                 assert len(inputs) == 1
                 last = FrameDifference(inputs[0])
