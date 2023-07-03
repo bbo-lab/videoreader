@@ -71,7 +71,7 @@ class PriorityThreadPool:
 
 
 class ImageCache:
-    def __init__(self, reader, n_frames = 0):
+    def __init__(self, reader, n_frames = 0, keyframes = None):
         self.reader = reader
         self.rlock = RLock()
         self.cached = {}
@@ -82,6 +82,7 @@ class ImageCache:
         self.num_preload = 20
         self.connect_segments = 20
         self.n_frames = n_frames
+        self.keyframes = keyframes
         self.ptp = PriorityThreadPool()
 
 

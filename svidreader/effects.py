@@ -3,11 +3,22 @@ import imageio.v3 as iio
 from svidreader.imagecache import ImageCache
 from ccvtools import rawio
 
+class VideoSupplier:
+    def __init__(self, n_frames):
+        self.n_frames = n_frames
 
-class BgrToGray:
+    def __iter__(self):
+        return self
+
+    def __len__(self):
+        return self.n_frames
+
+
+
+class BgrToGray(VideoSupplier):
     def __init__(self, reader):
+        super().__init__(reader.n_frames * 3)
         self.reader = reader
-        self.n_frames = reader.n_frames * 3
 
     def __enter__(self):
         return self
@@ -31,8 +42,6 @@ class BgrToGray:
     def get_meta_data(self):
         return self.reader.get_meta_data()
 
-    def __iter__(self):
-        return self
 
     def __next__(self):
         if (self.frame_idx + 1) < self.n_frames:
@@ -42,13 +51,12 @@ class BgrToGray:
             print("Reached end")
             raise StopIteration
 
-    def __len__(self):
-        return self.n_frames
 
-class FrameDifference:
+
+class FrameDifference(VideoSupplier):
     def __init__(self, reader):
+         super().__init__(reader.n_frames - 1)
         self.reader = reader
-        self.n_frames = reader.n_frames - 1
 
     def __enter__(self):
         return self
@@ -71,8 +79,6 @@ class FrameDifference:
     def get_meta_data(self):
         return self.reader.get_meta_data()
 
-    def __iter__(self):
-        return self
 
     def __next__(self):
         if (self.frame_idx + 1) < self.n_frames:
@@ -81,6 +87,3 @@ class FrameDifference:
         else:
             print("Reached end")
             raise StopIteration
-
-    def __len__(self):
-        return self.n_frames
