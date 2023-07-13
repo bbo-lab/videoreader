@@ -9,7 +9,7 @@ README = (HERE / "README.md").read_text()
 # This call to setup() does all the work
 setup(
     name="bbo-svidreader",
-    version="0.3.1",
+    version="0.3.2",
     description="Video reader on top of imageio that compares returned frames to a list of hashes",
     long_description=README,
     long_description_content_type="text/markdown",
@@ -27,5 +27,5 @@ setup(
     ],
     packages=['svidreader'],
     include_package_data=True,
-    install_requires=["imageio", "bbo_ccvtools"],
+    install_requires=["imageio", "bbo_ccvtools", "pyav<=9.2"],
 )

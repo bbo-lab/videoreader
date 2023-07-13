@@ -91,6 +91,9 @@ class SVidReader:
 
         return img
 
+    def read(self, index):
+        return self.get_data(fr_idx = index)
+
     def improps(self):
         return self.vprops
 

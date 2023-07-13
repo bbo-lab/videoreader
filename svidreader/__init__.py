@@ -1,1 +1,1 @@
-from svidreader.svidreader import SVidReader
+from svidreader.reader import SVidReader

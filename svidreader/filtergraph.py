@@ -2,8 +2,9 @@ import hashlib
 import imageio.v3 as iio
 from svidreader.imagecache import ImageCache
 from svidreader.effects import BgrToGray
+from svidreader.effects import AnalyzeContrast
 from svidreader.effects import FrameDifference
-from svidreader.svidreader import SVidReader
+from svidreader import SVidReader
 from ccvtools import rawio
 
 def create_filtergraph_from_string(inputs, pipeline):
@@ -46,15 +47,23 @@ def create_filtergraph_from_string(inputs, pipeline):
             if effectname == 'cache':
                 assert len(inputs) == 1
                 last = ImageCache(inputs[0])
-            if effectname == 'bgr2gray':
+            elif effectname == 'bgr2gray':
                 assert len(inputs) == 1
                 last = BgrToGray(inputs[0])
-            if effectname == 'tblend':
+            elif effectname == 'tblend':
                 assert len(inputs) == 1
                 last = FrameDifference(inputs[0])
             elif effectname == 'reader':
                 assert len(inputs) == 0
                 last = SVidReader(options['input'])
+            elif effectname == "contrast":
+                assert len(inputs) == 1
+                last = AnalyzeContrast(inputs[0])
+            elif effectname == "dump":
+                assert len(inputs) == 1
+                last = DumpToFile(reader=inputs[0], output=options['output'])
+            else:
+                raise Exception("Effectname " + effectname + " not known")
             for out in curoutputs:
                 filtergraph[out] = last
         except Exception as e:
