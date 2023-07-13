@@ -55,7 +55,7 @@ class DumpToFile(VideoSupplier):
 
 class AnalyzeContrast(VideoSupplier):
     def __init__(self, reader):
-        super().__init__(reader.n_frames * 3)
+        super().__init__(reader.n_frames)
         self.reader = reader
 
     def __exit__(self, exc_type, exc_value, traceback):
