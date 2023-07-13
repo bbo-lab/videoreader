@@ -56,6 +56,9 @@ def create_filtergraph_from_string(inputs, pipeline):
             elif effectname == 'reader':
                 assert len(inputs) == 0
                 last = SVidReader(options['input'])
+            elif effectname == 'permutate':
+                assert len(inputs) == 1
+                last = PermutateFrames(reader = inputs[0], permutation=options['input'])
             elif effectname == "contrast":
                 assert len(inputs) == 1
                 last = AnalyzeContrast(inputs[0])

@@ -52,6 +52,31 @@ class DumpToFile(VideoSupplier):
     def get_meta_data(self):
         return self.reader.get_meta_data()
 
+class Arange(VideoSupplier):
+    def __init__(self, reader, rows, cols):
+        super().__init__(reader[0].n_frames)
+        self.reader = reader
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        self.close()
+
+    def __del__(self):
+        self.close()
+
+    def close(self):
+        self.reader.close()
+
+    def read(self, index):
+        img = []
+        for r in self.reader:
+            img.append(r.read(index=index))
+        return img
+
+    def improps(self):
+        return self.reader.improps()
+
+    def get_meta_data(self):
+        return self.reader.get_meta_data()
 
 class AnalyzeContrast(VideoSupplier):
     def __init__(self, reader):
@@ -83,10 +108,15 @@ class AnalyzeContrast(VideoSupplier):
         return self.reader.get_meta_data()
 
 
+def read_numbers(filename):
+    with open(filename, 'r') as f:
+        return np.asarray([int(x) for x in f],dtype=int)
+
+
 class PermutateFrames(VideoSupplier):
     def __init__(self, reader, permutation):
         if isinstance(permutation, str):
-            pass
+            permutation = read_numbers(permutation)
         super().__init__(n_frames=len(permutation))
         self.reader = reader
 
@@ -100,7 +130,7 @@ class PermutateFrames(VideoSupplier):
         self.reader.close()
 
     def read(self, index):
-        img = self.reader.read(index=permutation(index))
+        img = self.reader.read(index=permutation[index])
         return img
 
     def improps(self):
