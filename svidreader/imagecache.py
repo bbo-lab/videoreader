@@ -197,21 +197,20 @@ class ImageCache(VideoSupplier):
 
 
     def read(self,index=None,blocking=True):
+        res = None
         with self.rlock:
             res = self.cached.get(index)
-            if res is not None:
-                for i in range(max(index - self.num_preload,0), min(index + self.num_preload,self.n_frames - 1), 1):
-                    self.load(index = i, lazy=True)
-                res.last_used = self.usage_counter
-                self.usage_counter += 1
-                return res.data
-
-        future = self.load(index, lazy=False)
+        if res is None:
+            future = self.load(index, lazy=False)
         end = index
         if self.n_frames > 0:
-            end = min(index + self.num_preload,self.n_frames)
-        for i in range(max(index - self.num_preload,0), end):
-            self.load(i,lazy=True)
+            end = min(index + self.num_preload, self.n_frames)
+        for i in range(max(index - self.num_preload, 0), end):
+            self.load(index=i, lazy=True)
+        if res is not None:
+            res.last_used = self.usage_counter
+            self.usage_counter += 1
+            return res.data
         if blocking:
             return self.get_result_from_future(future)
         future.add_done_callback(lambda : self.get_result_from_future(future))
