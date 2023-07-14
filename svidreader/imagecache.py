@@ -170,7 +170,6 @@ class ImageCache(VideoSupplier):
                 with self.rlock:
                     self.add_to_cache(i, data, hash(self.inputs[0]) * 7 + index)
         data = self.inputs[0].read(index=index)
-        last_read = index
         self.last_read = index
         with self.rlock:
             res = self.add_to_cache(index, data, hash(self.inputs[0]) * 7 + index)
@@ -208,7 +207,10 @@ class ImageCache(VideoSupplier):
                 return res.data
 
         future = self.load(index, lazy=False)
-        for i in range(max(index - self.num_preload,0), index + self.num_preload, 1):
+        end = index
+        if self.n_frames > 0:
+            end = min(index + self.num_preload,self.n_frames)
+        for i in range(max(index - self.num_preload,0), end):
             self.load(i,lazy=True)
         if blocking:
             return self.get_result_from_future(future)
