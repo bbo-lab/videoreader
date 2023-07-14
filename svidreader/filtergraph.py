@@ -10,7 +10,7 @@ from ccvtools import rawio
 def create_filtergraph_from_string(inputs, pipeline):
     filtergraph = {}
     sp = pipeline.split(';')
-    last = inputs
+    last = inputs[-1] if len(inputs) != 0 else None
     for line in sp:
         try:
             curinputs = []
@@ -23,7 +23,7 @@ def create_filtergraph_from_string(inputs, pipeline):
                 line = line[br_close + 1:len(line)]
             noinput = len(curinputs) == 0
             if noinput:
-                curinputs.append(last)
+                curinputs.extend(inputs)
             curoutputs = []
             while True:
                 line = line.strip()
@@ -55,12 +55,13 @@ def create_filtergraph_from_string(inputs, pipeline):
                 last = FrameDifference(curinputs[0])
             elif effectname == 'reader':
                 assert noinput
-                last = SVidReader(options['input'])
+                last = SVidReader(options['input'],cache=False)
             elif effectname == 'permutate':
                 assert len(curinputs) == 1
-                last = PermutateFrames(reader = inputs[0], permutation=options['input'])
+                last = PermutateFrames(reader = curinputs[0], permutation=options['input'])
             elif effectname == "contrast":
                 assert len(curinputs) == 1
+                print(curinputs)
                 last = AnalyzeContrast(curinputs[0])
             elif effectname == "dump":
                 assert len(curinputs) == 1

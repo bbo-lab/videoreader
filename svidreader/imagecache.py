@@ -3,7 +3,10 @@ import queue
 from threading import RLock
 import concurrent.futures
 from concurrent.futures import Future
-import copy
+import sys
+from enum import IntEnum
+
+import numpy as np
 from svidreader.video_supplier import VideoSupplier
 
 
@@ -18,6 +21,10 @@ class CachedFrame:
         self.last_used = last_used
         self.hash = hash
 
+    def memsize(self):
+        if isinstance(self.data, np.ndarray):
+            return self.data.nbytes
+        return sys.getsizeof(self.data)
 
 class QueuedLoad():
     def __init__(self, task, priority = 0, future = None):
@@ -72,22 +79,37 @@ class PriorityThreadPool:
                 self.wakeup.clear()
                 while not self.loadingQueue.empty():
                     elem = self.loadingQueue.get()
-                    res = elem.task()
-                    elem.future.set_result(res)
+                    try:
+                        res = elem.task()
+                        elem.future.set_result(res)
+                    except Exception as e:
+                        elem.future.set_exception(e)
 
+
+class FrameStatus(IntEnum):
+    NOT_CACHED = 0
+    LOADING_BG = 1
+    LOADING_FG = 2
+    CACHED = 3
 
 class ImageCache(VideoSupplier):
-    def __init__(self, reader, n_frames = 0, keyframes = None):
-        super().__init__(n_frames=n_frames, inputs=(reader,))
+    def __init__(self, reader, keyframes = None):
+        super().__init__(n_frames=reader.n_frames, inputs=(reader,))
+        if self.n_frames > 0:
+            self.framestatus = np.full(shape=(self.n_frames,),dtype=np.uint8,fill_value=FrameStatus.NOT_CACHED)
+        else:
+            self.framestatus = {}
+        self.verbose = True
         self.rlock = RLock()
         self.cached = {}
-        self.maxsize = 100
+        self.maxcount = 100
+        self.maxmemsize = 1000000000
+        self.curmemsize = 0
         self.th = None
         self.usage_counter = 0
         self.last_read = 0
         self.num_preload = 20
         self.connect_segments = 20
-        self.n_frames = n_frames
         self.keyframes = keyframes
         self.ptp = PriorityThreadPool()
 
@@ -98,17 +120,42 @@ class ImageCache(VideoSupplier):
 
 
     def add_to_cache(self, index, data, hash):
-        res = CachedFrame(data, self.usage_counter, hash)
-        self.cached[index] = res
+        res = self.cached.get(index)
+        if res is not None:
+            self.curmemsize -= res.memsize()
+            res.data = data
+            res.last_used = self.usage_counter
+            res.hash = hash
+        else:
+            res = CachedFrame(data, self.usage_counter, hash)
+            self.cached[index] = res
+        self.framestatus[index] = FrameStatus.CACHED
+        self.curmemsize += res.memsize()
         self.usage_counter += 1
         return res
 
 
     def clean(self):
-        if len(self.cached) > self.maxsize:
-                for key in [k for k in self.cached]:
-                    if self.cached[key].last_used < self.usage_counter - self.maxsize:
-                        del self.cached[key]
+        if len(self.cached) > self.maxcount or self.curmemsize > self.maxmemsize:
+            last_used = np.zeros(len(self.cached),dtype=int)
+            keys = np.zeros(len(self.cached),dtype=int)
+            i = 0
+            for k, v in self.cached.items():
+                keys[i] = k
+                last_used[i] = v.last_used
+                i += 1
+            try:
+                partition = np.argpartition(last_used, self.maxcount)
+                oldmemsize = self.curmemsize
+                oldsize = len(last_used)
+                for p in partition[:len(last_used) - self.maxcount * 3 // 4]:
+                    k = keys[p]
+                    self.curmemsize -= self.cached[k].memsize()
+                    self.framestatus[k] = FrameStatus.NOT_CACHED
+                    del self.cached[k]
+            except Exception as e:
+                print(e)
+            print("cleaned", oldsize - len(self.cached),"of", oldsize, "freed",(oldmemsize - self.curmemsize)//1024//1024,"MB of",oldmemsize//1024//1024,"MB")
 
 
     def read_impl(self,index):
@@ -131,11 +178,16 @@ class ImageCache(VideoSupplier):
             return res
 
 
-    def preload(self, index):
-        with self.rlock:
-             if index in self.cached:
+    def load(self, index, lazy = False):
+        if lazy:
+            if self.framestatus[index] > FrameStatus.NOT_CACHED:
                 return
-        self.ptp.submit(lambda: self.read_impl(index=index), priority = index)
+            self.framestatus[index] = FrameStatus.LOADING_BG
+            priority = index
+        else:
+            self.framestatus[index] = FrameStatus.LOADING_FG
+            priority=index - self.num_preload
+        return self.ptp.submit(lambda: self.read_impl(index), priority=priority)
 
 
     def get_result_from_future(self, future):
@@ -150,22 +202,15 @@ class ImageCache(VideoSupplier):
             res = self.cached.get(index)
             if res is not None:
                 for i in range(max(index - self.num_preload,0), min(index + self.num_preload,self.n_frames - 1), 1):
-                    self.preload(index = i)
+                    self.load(index = i, lazy=True)
                 res.last_used = self.usage_counter
                 self.usage_counter += 1
                 return res.data
 
-        future = self.ptp.submit(lambda : self.read_impl(index), priority = index - 1000000)
+        future = self.load(index, lazy=False)
         for i in range(max(index - self.num_preload,0), index + self.num_preload, 1):
-            self.preload(i)
+            self.load(i,lazy=True)
         if blocking:
             return self.get_result_from_future(future)
         future.add_done_callback(lambda : self.get_result_from_future(future))
 
-    def __next__(self):
-        if (self.frame_idx + 1) < self.n_frames:
-            self.frame_idx += 1
-            return self.read(self.frame_idx)
-        else:
-            print("Reached end")
-            raise StopIteration
