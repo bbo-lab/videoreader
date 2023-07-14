@@ -20,8 +20,9 @@ def create_filtergraph_from_string(inputs, pipeline):
                     break
                 br_close= line.find(']')
                 curinputs.append(filtergraph[line[1:br_close]])
-                line = line[br_close:len(line)]
-            if len(curinputs) == 0:
+                line = line[br_close + 1:len(line)]
+            noinput = len(curinputs) == 0
+            if noinput:
                 curinputs.append(last)
             curoutputs = []
             while True:
@@ -37,7 +38,6 @@ def create_filtergraph_from_string(inputs, pipeline):
             if eqindex != -1:
                 effectname = line[0:eqindex]
                 line = line[eqindex + 1:len(line)]
-            print(line)
             line = line.split(':')
             options = {}
             for opt in line:
@@ -45,26 +45,26 @@ def create_filtergraph_from_string(inputs, pipeline):
                 options[opt[0:eqindex]] = opt[eqindex + 1:len(opt)]
 
             if effectname == 'cache':
-                assert len(inputs) == 1
-                last = ImageCache(inputs[0])
+                assert len(curinputs) == 1
+                last = ImageCache(curinputs[0])
             elif effectname == 'bgr2gray':
-                assert len(inputs) == 1
-                last = BgrToGray(inputs[0])
+                assert len(curinputs) == 1
+                last = BgrToGray(curinputs[0])
             elif effectname == 'tblend':
-                assert len(inputs) == 1
-                last = FrameDifference(inputs[0])
+                assert len(curinputs) == 1
+                last = FrameDifference(curinputs[0])
             elif effectname == 'reader':
-                assert len(inputs) == 0
+                assert noinput
                 last = SVidReader(options['input'])
             elif effectname == 'permutate':
-                assert len(inputs) == 1
+                assert len(curinputs) == 1
                 last = PermutateFrames(reader = inputs[0], permutation=options['input'])
             elif effectname == "contrast":
-                assert len(inputs) == 1
-                last = AnalyzeContrast(inputs[0])
+                assert len(curinputs) == 1
+                last = AnalyzeContrast(curinputs[0])
             elif effectname == "dump":
-                assert len(inputs) == 1
-                last = DumpToFile(reader=inputs[0], output=options['output'])
+                assert len(curinputs) == 1
+                last = DumpToFile(reader=curinputs[0], output=options['output'])
             else:
                 raise Exception("Effectname " + effectname + " not known")
             for out in curoutputs:

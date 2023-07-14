@@ -1,99 +1,39 @@
 import hashlib
 import imageio.v3 as iio
-from svidreader.imagecache import ImageCache
+from svidreader.video_supplier import VideoSupplier
 from ccvtools import rawio
 import numpy as np
 
-class VideoSupplier:
-    def __init__(self, n_frames):
-        self.n_frames = n_frames
-
-    def __iter__(self):
-        return self
-
-    def __len__(self):
-        return self.n_frames
-
-    def __enter__(self):
-        return self
-
-    def __next__(self):
-        if (self.frame_idx + 1) < self.n_frames:
-            self.frame_idx += 1
-            return self.read(self.frame_idx)
-        else:
-            print("Reached end")
-            raise StopIteration
-
-
 class DumpToFile(VideoSupplier):
     def __init__(self, reader, output):
-        self.reader = reader
+        super().__init__(n_frames= reader.n_frames, inputs=(reader,))
         self.output = open(output, 'w')
 
-    def __exit__(self, exc_type, exc_value, traceback):
-        self.close()
-
-    def __del__(self):
-        self.close()
-
     def close(self):
-        self.reader.close()
+        super().close()
         self.output.close()
 
     def read(self, index):
-        data = self.reader.read(index=index)
+        data = self.inputs[0].read(index=index)
         self.output.write(str(index) + ' ' + ' '.join(map(str, data)) + '\n')
         return data
 
-    def improps(self):
-        return self.reader.improps()
-
-    def get_meta_data(self):
-        return self.reader.get_meta_data()
-
 class Arange(VideoSupplier):
     def __init__(self, reader, rows, cols):
-        super().__init__(reader[0].n_frames)
-        self.reader = reader
-
-    def __exit__(self, exc_type, exc_value, traceback):
-        self.close()
-
-    def __del__(self):
-        self.close()
-
-    def close(self):
-        self.reader.close()
+        super().__init__(n_frames=reader[0].n_frames, inputs=[reader])
 
     def read(self, index):
         img = []
-        for r in self.reader:
+        for r in self.inputs:
             img.append(r.read(index=index))
         return img
 
-    def improps(self):
-        return self.reader.improps()
-
-    def get_meta_data(self):
-        return self.reader.get_meta_data()
-
 class AnalyzeContrast(VideoSupplier):
     def __init__(self, reader):
-        super().__init__(reader.n_frames)
-        self.reader = reader
-
-    def __exit__(self, exc_type, exc_value, traceback):
-        self.close()
-
-    def __del__(self):
-        self.close()
-
-    def close(self):
-        self.reader.close()
+        super().__init__(n_frames=reader.n_frames, inputs=(reader,))
 
     def read(self, index):
-        img = self.reader.read(index=index)
+        img = self.inputs[0].read(index=index)
         gy, gx = np.gradient(img, axis=(0, 1))
         np.square(gx, out=gx)
         np.square(gy, out=gy)
@@ -101,89 +41,38 @@ class AnalyzeContrast(VideoSupplier):
         np.sqrt(gx, out=gx)
         return np.average(gx)
 
-    def improps(self):
-        return self.reader.improps()
-
-    def get_meta_data(self):
-        return self.reader.get_meta_data()
-
-
 def read_numbers(filename):
     with open(filename, 'r') as f:
         return np.asarray([int(x) for x in f],dtype=int)
+
+
+class TimeToFrame(VideoSupplier):
+    def __init__(self, reader, timingfile):
+        import pandas
 
 
 class PermutateFrames(VideoSupplier):
     def __init__(self, reader, permutation):
         if isinstance(permutation, str):
             permutation = read_numbers(permutation)
-        super().__init__(n_frames=len(permutation))
-        self.reader = reader
-
-    def __exit__(self, exc_type, exc_value, traceback):
-        self.close()
-
-    def __del__(self):
-        self.close()
-
-    def close(self):
-        self.reader.close()
+        super().__init__(n_frames=len(permutation), inputs=(reader,))
 
     def read(self, index):
-        img = self.reader.read(index=permutation[index])
+        img = self.inputs[0].read(index=permutation[index])
         return img
-
-    def improps(self):
-        return self.reader.improps()
-
-    def get_meta_data(self):
-        return self.reader.get_meta_data()
-
 
 class BgrToGray(VideoSupplier):
     def __init__(self, reader):
-        super().__init__(reader.n_frames * 3)
-        self.reader = reader
-
-    def __exit__(self, exc_type, exc_value, traceback):
-        self.close()
-
-    def __del__(self):
-        self.close()
-
-    def close(self):
-        self.reader.close()
+        super().__init__(n_frames=reader.n_frames * 3, inputs=(reader,))
 
     def read(self, index):
-        img = self.reader.read(index=index // 3)
+        img = self.inputs[0].read(index=index // 3)
         return img[:,:,index % 3]
-
-    def improps(self):
-        return self.reader.improps()
-
-    def get_meta_data(self):
-        return self.reader.get_meta_data()
 
 
 class FrameDifference(VideoSupplier):
     def __init__(self, reader):
-        super().__init__(reader.n_frames - 1)
-        self.reader = reader
-
-    def __exit__(self, exc_type, exc_value, traceback):
-        self.close()
-
-    def __del__(self):
-        self.close()
-
-    def close(self):
-        self.reader.close()
+        super().__init__(n_frames=reader.n_frames - 1, inputs = (reader,))
 
     def read(self, index):
-        return 128 + self.reader.read(index=index + 1) - self.reader.read(index=index)
-
-    def improps(self):
-        return self.reader.improps()
-
-    def get_meta_data(self):
-        return self.reader.get_meta_data()
+        return 128 + self.inputs[0].read(index=index + 1) - self.inputs[0].read(index=index)
