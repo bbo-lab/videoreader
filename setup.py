@@ -27,5 +27,5 @@ setup(
     ],
     packages=['svidreader'],
     include_package_data=True,
-    install_requires=["imageio", "bbo_ccvtools", "pyav<=9.2"],
+    install_requires=["imageio", "bbo_ccvtools", "pyav", "numpy"],
 )
