@@ -69,7 +69,7 @@ def create_filtergraph_from_string(inputs, pipeline):
                 last = AnalyzeContrast(curinputs[0])
             elif effectname == "viewer":
                 assert len(curinputs) == 1
-                last = MatplotlibViewer(curinputs[0], frontend=options['frontend'] if 'frontend' in options else "matplotlib")
+                last = MatplotlibViewer(curinputs[0], backend=options['backend'] if 'backend' in options else "matplotlib")
             elif effectname == "dump":
                 assert len(curinputs) == 1
                 last = DumpToFile(reader=curinputs[0], output=options['output'])

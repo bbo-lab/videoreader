@@ -4,10 +4,10 @@ from svidreader.video_supplier import VideoSupplier
 import numpy as np
 
 class MatplotlibViewer(VideoSupplier):
-    def __init__(self, reader, cmap=None, frontend="matplotlib"):
+    def __init__(self, reader, cmap=None, backend="matplotlib"):
         super().__init__(n_frames=reader.n_frames, inputs=(reader,))
-        self.frontend = frontend
-        if frontend == "matplotlib":
+        self.backend = backend
+        if backend == "matplotlib":
             import matplotlib.pyplot as plt
             from matplotlib.widgets import Slider
             from matplotlib.widgets import Button
@@ -34,7 +34,7 @@ class MatplotlibViewer(VideoSupplier):
     def read(self, index,source=None):
         self.frame = index
         img = self.inputs[0].read(index)
-        if self.frontend == "opencv":
+        if self.backend == "opencv":
             import cv2
             print("opencv-show")
             try:
@@ -42,7 +42,7 @@ class MatplotlibViewer(VideoSupplier):
             except:
                 pass
             print("showing")
-        elif self.frontend == "ffplay":
+        elif self.backend == "ffplay":
             import os
             import subprocess as sp
             if self.pipe == None:
@@ -55,10 +55,10 @@ class MatplotlibViewer(VideoSupplier):
                            '-i','-']
                 self.pipe = sp.Popen(command, stdin=sp.PIPE, stderr=sp.STDOUT, bufsize=1000, preexec_fn=os.setpgrp)
             self.pipe.stdin.write(img.tobytes())
-        elif self.frontend == "skimage":
+        elif self.backend == "skimage":
             from skimage import io
             io.imshow(img)
-        elif self.frontend == "matplotlib":
+        elif self.backend == "matplotlib":
             import matplotlib.pyplot as plt
             if not self.updating:
                 self.updating = True
@@ -70,7 +70,7 @@ class MatplotlibViewer(VideoSupplier):
                     plt.gcf().canvas.start_event_loop(0.01)
                 self.updating = False
         else:
-            raise Exception("Unknown frontend")
+            raise Exception("Unknown backend")
         return img
 
 
