@@ -20,3 +20,17 @@ This is a simple tool if you want to use the videoreader from the commandline. Y
 
 #### Examples:
  - python3 svidreader/run_pipeline.py -i ../test/cubes.mp4 --filtergraph "contrast" --output test.csv
+#### List of effects:
+ - scale\
+   Scales input by a given factor\
+   scale: float, factor of scaling
+ - arange\
+   Aranges multiple inputs into a grid\
+   ncols: int, number of columns
+ - viewer\
+   Views the last read input
+   backend: string, Backend to be used, values are matplotlib, ffplay, opencv
+ - bgr2gray\
+   Converts each RGB-input-frame to three grayscale-outputs
+ - cache\
+   Adds a cache with saves the last shown frames
