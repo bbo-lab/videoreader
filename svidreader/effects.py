@@ -19,14 +19,25 @@ class DumpToFile(VideoSupplier):
         return data
 
 class Arange(VideoSupplier):
-    def __init__(self, reader, rows, cols):
-        super().__init__(n_frames=reader[0].n_frames, inputs=[reader])
+    def __init__(self, inputs, ncols=-1):
+        super().__init__(n_frames=inputs[0].n_frames, inputs=inputs)
+        self.ncols = ncols
 
     def read(self, index):
-        img = []
+        grid = [[]]
+        maxdim = np.zeros(shape=(3,), dtype=int)
         for r in self.inputs:
-            img.append(r.read(index=index))
-        return img
+            if len(grid[-1]) == self.ncols:
+                grid.append([])
+            img = r.read(index=index)
+            grid[-1].append(img)
+            maxdim = np.maximum(maxdim, img.shape)
+        res = np.zeros(shape=(maxdim[0] * len(grid), maxdim[1] * len(grid[0]), maxdim[2]),dtype=grid[0][0].dtype)
+        for col in range(len(grid)):
+            for row in range(len(grid[col])):
+                img = grid[col][row]
+                res[col * maxdim[0]: col * maxdim[0] + img.shape[0], row * maxdim[1]: row * maxdim[1] + img.shape[1]] = img
+        return res
 
 class AnalyzeContrast(VideoSupplier):
     def __init__(self, reader):
@@ -40,6 +51,17 @@ class AnalyzeContrast(VideoSupplier):
         gx += gy
         np.sqrt(gx, out=gx)
         return np.average(gx)
+
+class Scale(VideoSupplier):
+    def __init__(self, reader, scale):
+        super().__init__(n_frames=reader.n_frames, inputs=(reader,))
+        self.scale = scale
+
+    def read(self, index):
+        import cv2
+        img = self.inputs[0].read(index=index)
+        resized = cv2.resize(img, (int(img.shape[1] * self.scale), int(img.shape[0] * self.scale)))
+        return resized
 
 def read_numbers(filename):
     with open(filename, 'r') as f:

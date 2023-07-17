@@ -4,11 +4,16 @@ from svidreader.imagecache import ImageCache
 from svidreader.effects import BgrToGray
 from svidreader.effects import AnalyzeContrast
 from svidreader.effects import FrameDifference
+from svidreader.effects import Scale
+from svidreader.effects import Arange
+from svidreader.viewer import MatplotlibViewer
 from svidreader import SVidReader
 from ccvtools import rawio
 
 def create_filtergraph_from_string(inputs, pipeline):
     filtergraph = {}
+    for i in range(len(inputs)):
+        filtergraph["input_"+str(i)] = inputs[i]
     sp = pipeline.split(';')
     last = inputs[-1] if len(inputs) != 0 else None
     for line in sp:
@@ -46,7 +51,7 @@ def create_filtergraph_from_string(inputs, pipeline):
 
             if effectname == 'cache':
                 assert len(curinputs) == 1
-                last = ImageCache(curinputs[0])
+                last = ImageCache(curinputs[0],maxcount=1000)
             elif effectname == 'bgr2gray':
                 assert len(curinputs) == 1
                 last = BgrToGray(curinputs[0])
@@ -61,11 +66,18 @@ def create_filtergraph_from_string(inputs, pipeline):
                 last = PermutateFrames(reader = curinputs[0], permutation=options['input'])
             elif effectname == "contrast":
                 assert len(curinputs) == 1
-                print(curinputs)
                 last = AnalyzeContrast(curinputs[0])
+            elif effectname == "viewer":
+                assert len(curinputs) == 1
+                last = MatplotlibViewer(curinputs[0], frontend=options['frontend'] if 'frontend' in options else "matplotlib")
             elif effectname == "dump":
                 assert len(curinputs) == 1
                 last = DumpToFile(reader=curinputs[0], output=options['output'])
+            elif effectname == "arange":
+                last = Arange(inputs=curinputs, ncols=int(options['ncols']) if 'ncols' in options else -1)
+            elif effectname == "scale":
+                assert len(curinputs) == 1
+                last = Scale(reader=curinputs[0], scale=float(options['scale']))
             else:
                 raise Exception("Effectname " + effectname + " not known")
             for out in curoutputs:

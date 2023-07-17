@@ -27,7 +27,7 @@ class SVidReader:
         self.reader = iio.imopen(self.video, "r", plugin=self.plugin)
         self.reader.n_frames = self.vprops.shape[0]
         if cache is None:
-            self.reader = ImageCache(self.reader)
+            self.reader = ImageCache(self.reader, maxcount=500)
         elif cache != False:
             cache.reader = reader
             self.reader = cache

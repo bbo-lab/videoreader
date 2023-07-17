@@ -93,7 +93,7 @@ class FrameStatus(IntEnum):
     CACHED = 3
 
 class ImageCache(VideoSupplier):
-    def __init__(self, reader, keyframes = None):
+    def __init__(self, reader, keyframes = None, maxcount = 100):
         super().__init__(n_frames=reader.n_frames, inputs=(reader,))
         if self.n_frames > 0:
             self.framestatus = np.full(shape=(self.n_frames,),dtype=np.uint8,fill_value=FrameStatus.NOT_CACHED)
@@ -102,8 +102,8 @@ class ImageCache(VideoSupplier):
         self.verbose = True
         self.rlock = RLock()
         self.cached = {}
-        self.maxcount = 100
-        self.maxmemsize = 1000000000
+        self.maxcount = maxcount
+        self.maxmemsize = 10000000000
         self.curmemsize = 0
         self.th = None
         self.usage_counter = 0
@@ -148,14 +148,14 @@ class ImageCache(VideoSupplier):
                 partition = np.argpartition(last_used, self.maxcount)
                 oldmemsize = self.curmemsize
                 oldsize = len(last_used)
-                for p in partition[:len(last_used) - self.maxcount * 3 // 4]:
+                for p in partition[:max(0,len(last_used) - self.maxcount * 3 // 4)]:
                     k = keys[p]
                     self.curmemsize -= self.cached[k].memsize()
                     self.framestatus[k] = FrameStatus.NOT_CACHED
                     del self.cached[k]
+                print("cleaned", oldsize - len(self.cached),"of", oldsize, "freed",(oldmemsize - self.curmemsize)//1024//1024,"MB of",oldmemsize//1024//1024,"MB")
             except Exception as e:
                 print(e)
-            print("cleaned", oldsize - len(self.cached),"of", oldsize, "freed",(oldmemsize - self.curmemsize)//1024//1024,"MB of",oldmemsize//1024//1024,"MB")
 
 
     def read_impl(self,index):
