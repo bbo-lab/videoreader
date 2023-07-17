@@ -5,9 +5,16 @@ from ccvtools import rawio
 import numpy as np
 
 class DumpToFile(VideoSupplier):
-    def __init__(self, reader, output):
+    def __init__(self, reader, outputfile):
+        import imageio
         super().__init__(n_frames= reader.n_frames, inputs=(reader,))
-        self.output = open(output, 'w')
+        self.outputfile = outputfile
+        if outputfile.endswith('.mp4'):
+            self.type = "movie"
+            self.output =  imageio.get_writer(outputfile)
+        else:
+            self.type = "csv"
+            self.output = open(outputfile, 'w')
 
     def close(self):
         super().close()
@@ -15,7 +22,10 @@ class DumpToFile(VideoSupplier):
 
     def read(self, index):
         data = self.inputs[0].read(index=index)
-        self.output.write(str(index) + ' ' + ' '.join(map(str, data)) + '\n')
+        if self.type == "movie":
+            self.output.append_data(data)
+        elif self.type == "csv":
+            self.output.write(str(index) + ' ' + ' '.join(map(str, data)) + '\n')
         return data
 
 class Arange(VideoSupplier):
@@ -38,6 +48,16 @@ class Arange(VideoSupplier):
                 img = grid[col][row]
                 res[col * maxdim[0]: col * maxdim[0] + img.shape[0], row * maxdim[1]: row * maxdim[1] + img.shape[1]] = img
         return res
+
+class Crop(VideoSupplier):
+    def __init__(self, reader, width=-1, height=-1):
+        super().__init__(n_frames=reader.n_frames, inputs=(reader,))
+        self.width = width
+        self.height = height
+
+    def read(self, index):
+        img = self.inputs[0].read(index=index)
+        return img[0:self.height, 0:self.width]
 
 class AnalyzeContrast(VideoSupplier):
     def __init__(self, reader):
@@ -71,6 +91,7 @@ def read_numbers(filename):
 class TimeToFrame(VideoSupplier):
     def __init__(self, reader, timingfile):
         import pandas
+        timings = pd.read_csv(timingfile)
 
 
 class PermutateFrames(VideoSupplier):

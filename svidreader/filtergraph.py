@@ -5,6 +5,8 @@ from svidreader.effects import BgrToGray
 from svidreader.effects import AnalyzeContrast
 from svidreader.effects import FrameDifference
 from svidreader.effects import Scale
+from svidreader.effects import Crop
+from svidreader.effects import DumpToFile
 from svidreader.effects import Arange
 from svidreader.viewer import MatplotlibViewer
 from svidreader import SVidReader
@@ -67,12 +69,16 @@ def create_filtergraph_from_string(inputs, pipeline):
             elif effectname == "contrast":
                 assert len(curinputs) == 1
                 last = AnalyzeContrast(curinputs[0])
+            elif effectname == "crop":
+                assert len(curinputs) == 1
+                sp = options['size'].split('x')
+                last = Crop(curinputs[0], width = int(sp[0]), height=int(sp[1]))
             elif effectname == "viewer":
                 assert len(curinputs) == 1
                 last = MatplotlibViewer(curinputs[0], backend=options['backend'] if 'backend' in options else "matplotlib")
             elif effectname == "dump":
                 assert len(curinputs) == 1
-                last = DumpToFile(reader=curinputs[0], output=options['output'])
+                last = DumpToFile(reader=curinputs[0], outputfile=options['output'])
             elif effectname == "arange":
                 last = Arange(inputs=curinputs, ncols=int(options['ncols']) if 'ncols' in options else -1)
             elif effectname == "scale":
