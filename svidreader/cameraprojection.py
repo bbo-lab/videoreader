@@ -5,7 +5,6 @@ import numpy as np
 from calibcamlib import Camerasystem
 from scipy.spatial.transform import Rotation
 
-
 class PerspectiveCameraProjection(VideoSupplier):
     def __init__(self, reader, config_file):
         super().__init__(n_frames=reader.n_frames, inputs=(reader,))
