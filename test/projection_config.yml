@@ -1,0 +1,13 @@
+calib_file: ""
+
+view_long: 66
+view_lat: 29
+
+perspective_video:
+  scaling_factor: 1550
+  height: 480
+  width: 480
+
+output_video:
+  interpolate:
+    method: "nearest"
