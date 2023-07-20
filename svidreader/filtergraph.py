@@ -6,8 +6,10 @@ from svidreader.effects import AnalyzeContrast
 from svidreader.effects import FrameDifference
 from svidreader.effects import Scale
 from svidreader.effects import Arange
+from svidreader.effects import DumpToFile
 from svidreader.viewer import MatplotlibViewer
 from svidreader import SVidReader
+from svidreader.cameraprojection import PerspectiveCameraProjection
 from ccvtools import rawio
 
 def create_filtergraph_from_string(inputs, pipeline):
@@ -73,7 +75,7 @@ def create_filtergraph_from_string(inputs, pipeline):
                 last = Crop(curinputs[0], width = int(sp[0]), height=int(sp[1]))
             elif effectname == "perprojection":
                 assert len(curinputs) == 1
-                last = PerspectiveCameraProjection(curinputs[0], config_file=options['calibtration'])
+                last = PerspectiveCameraProjection(curinputs[0], config_file=options['calibration'])
             elif effectname == "viewer":
                 assert len(curinputs) == 1
                 last = MatplotlibViewer(curinputs[0], backend=options['backend'] if 'backend' in options else "matplotlib")
