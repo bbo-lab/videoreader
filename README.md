@@ -34,3 +34,5 @@ This is a simple tool if you want to use the videoreader from the commandline. Y
    Converts each RGB-input-frame to three grayscale-outputs
  - cache\
    Adds a cache with saves the last shown frames
+ - tblend\
+   A subtraction of the previous to the current frame
