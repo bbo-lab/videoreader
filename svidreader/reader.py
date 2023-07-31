@@ -91,6 +91,28 @@ class SVidReader:
 
         return img
 
+    def __hash__(self, fast_unsafe=False):
+        # Currently, this function is just used to get hash which is used as src_id of the video.
+        block_size = 65536
+        hash_fun = hashlib.md5()
+
+        if fast_unsafe:
+            read_max = block_size * 100
+            with open(url, 'rb') as f:
+                buffer = f.read(block_size)
+                while len(buffer) > 0 and read_bytes < read_max:  # arbitrary count limit
+                    hash_fun.update(buffer[0:min(len(buffer, read_max - read_bytes))])
+                    read_bytes += len(buffer)
+                    buffer = f.read(block_size)
+            return hash_fun.hexdigest()
+
+        with open(url, 'rb') as f:
+            buffer = f.read(block_size)
+            while len(buffer) > 0 :  # arbitrary count limit
+                hash_fun.update(buffer)
+                buffer = f.read(block_size)
+            return hash_fun.hexdigest()
+
     def read(self, index):
         return self.get_data(fr_idx = index)
 
