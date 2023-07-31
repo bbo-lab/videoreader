@@ -106,7 +106,7 @@ class SVidReader:
                     hash_fun.update(buffer[0:min(len(buffer, read_max - read_bytes))])
                     read_bytes += len(buffer)
                     buffer = f.read(block_size)
-            return hash_fun.hexdigest()
+            return int(hash_fun.hexdigest(), 16)
 
         with open(self.video, 'rb') as f:
             if self.hash is None:
@@ -114,7 +114,7 @@ class SVidReader:
                 while len(buffer) > 0 :  # arbitrary count limit
                     hash_fun.update(buffer)
                     buffer = f.read(block_size)
-                self.hash = hash_fun.hexdigest()
+                self.hash = int(hash_fun.hexdigest(), 16)
             return self.hash
 
     def read(self, index):
