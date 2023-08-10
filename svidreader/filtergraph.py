@@ -77,7 +77,7 @@ def create_filtergraph_from_string(inputs, pipeline):
                 last = Crop(curinputs[0], width = int(sp[0]), height=int(sp[1]))
             elif effectname == "perprojection":
                 assert len(curinputs) == 1
-                last = PerspectiveCameraProjection(curinputs[0], config_file=options['calibration'])
+                last = PerspectiveCameraProjection(curinputs[0], config_file=options.get('calibration', None))
             elif effectname == "viewer":
                 assert len(curinputs) == 1
                 last = MatplotlibViewer(curinputs[0], backend=options['backend'] if 'backend' in options else "matplotlib")
