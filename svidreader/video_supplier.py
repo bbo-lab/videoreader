@@ -33,8 +33,8 @@ class VideoSupplier:
 
     def __hash__(self):
         res = hash(self.__class__.__name__)
-        for i in range(inputs):
-            res = res * 7 + hash(inputs[i])
+        for i in self.inputs:
+            res = res * 7 + hash(i)
         return res
 
     def __next__(self):
