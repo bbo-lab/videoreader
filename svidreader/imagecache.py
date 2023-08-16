@@ -18,6 +18,7 @@ from svidreader.video_supplier import VideoSupplier
 class CachedFrame:
     def __init__(self, data, last_used, hash):
         self.data = data
+        self.png = None
         self.last_used = last_used
         self.hash = hash
 

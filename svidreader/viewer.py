@@ -32,6 +32,7 @@ class MatplotlibViewer(VideoSupplier):
         self.pipe = None
 
     def read(self, index,source=None):
+        print(self.backend)
         self.frame = index
         img = self.inputs[0].read(index)
         if self.backend == "opencv":
@@ -50,9 +51,10 @@ class MatplotlibViewer(VideoSupplier):
                            '-f', 'rawvideo',
                            '-vcodec', 'rawvideo',
                            '-video_size', str(img.shape[1]) + 'x' + str(img.shape[0]),  # size of one frame
-                           '-pixel_format', 'rgb24',
-                           '-framerate', '100',
+                           '-pixel_format', 'rgb24' if img.shape[2] == 3 else 'gray8',
+                           '-framerate', '200',
                            '-i','-']
+                print(command)
                 self.pipe = sp.Popen(command, stdin=sp.PIPE, stderr=sp.STDOUT, bufsize=1000, preexec_fn=os.setpgrp)
             self.pipe.stdin.write(img.tobytes())
         elif self.backend == "skimage":

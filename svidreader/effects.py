@@ -110,7 +110,7 @@ class BgrToGray(VideoSupplier):
 
     def read(self, index):
         img = self.inputs[0].read(index=index // 3)
-        return img[:,:,index % 3]
+        return img[:,:,[index % 3]]
 
 
 class FrameDifference(VideoSupplier):

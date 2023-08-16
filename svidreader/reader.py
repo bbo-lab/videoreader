@@ -15,6 +15,7 @@ class SVidReader:
         self.has_issues = False
         self.plugin = "pyav"
         self.frame_idx = 0
+        self.hash = None
 
         if video[-4:] == '.ccv':
             self.plugin = None
@@ -35,7 +36,7 @@ class SVidReader:
         if pipe >= 0:
             import svidreader.filtergraph as filtergraph
             self.reader = filtergraph.create_filtergraph_from_string([self.reader],video[pipe+1:len(video)])['out']
-        
+
         if calc_hashes:
             for img in hash_iterator(iio.imiter(video,
                                                 plugin=self.plugin,
@@ -90,6 +91,31 @@ class SVidReader:
             imghash = hashlib.md5(img).hexdigest()
 
         return img
+
+    def __hash__(self, fast_unsafe=False):
+        # Currently, this function is just used to get hash which is used as src_id of the video.
+        block_size = 65536
+        hash_fun = hashlib.md5()
+
+        if fast_unsafe:
+            read_max = block_size * 100
+            read_bytes = 0
+            with open(self.video, 'rb') as f:
+                buffer = f.read(block_size)
+                while len(buffer) > 0 and read_bytes < read_max:  # arbitrary count limit
+                    hash_fun.update(buffer[0:min(len(buffer), read_max - read_bytes)])
+                    read_bytes += len(buffer)
+                    buffer = f.read(block_size)
+            return int(hash_fun.hexdigest(), 16)
+
+        with open(self.video, 'rb') as f:
+            if self.hash is None:
+                buffer = f.read(block_size)
+                while len(buffer) > 0 :  # arbitrary count limit
+                    hash_fun.update(buffer)
+                    buffer = f.read(block_size)
+                self.hash = int(hash_fun.hexdigest(), 16)
+            return self.hash
 
     def read(self, index):
         return self.get_data(fr_idx = index)
