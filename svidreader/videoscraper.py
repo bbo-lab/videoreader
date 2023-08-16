@@ -1,13 +1,14 @@
 from svidreader.video_supplier import VideoSupplier
 import os
-import clip
-import torch
-from torchvision.datasets import CIFAR100
-from PIL import Image
 
 
 class VideoScraper(VideoSupplier):
     def __init__(self, reader, tokens="dog, cat", subdivision_shape=(5,3), overlay=True):
+        import clip
+        import torch
+        from torchvision.datasets import CIFAR100
+        from PIL import Image
+
         super().__init__(n_frames=reader.n_frames, inputs=(reader,))
         # Load the model
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -17,9 +18,12 @@ class VideoScraper(VideoSupplier):
         self.overlay = overlay
 
     def read(self, index):
+        import clip
+        import torch
+        from torchvision.datasets import CIFAR100
+        from PIL import Image
+
         img = self.inputs[0].read(index=index)
-
-
         image = self.preprocess(Image.fromarray(img)).unsqueeze(0).to(self.device)
 
         with torch.no_grad():
