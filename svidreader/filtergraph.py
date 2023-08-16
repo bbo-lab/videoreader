@@ -1,18 +1,86 @@
 import hashlib
 import imageio.v3 as iio
 from svidreader.imagecache import ImageCache
+from svidreader.videoscraper import VideoScraper
 from svidreader.effects import BgrToGray
-from svidreader.effects import AnalyzeContrast
+from svidreader.effects import AnalyzeImage
 from svidreader.effects import FrameDifference
 from svidreader.effects import Scale
 from svidreader.effects import Crop
+from svidreader.majorityvote import MajorityVote
 from svidreader.effects import DumpToFile
 from svidreader.effects import Arange
+from svidreader.effects import PermutateFrames
 from svidreader.effects import DumpToFile
+from svidreader.effects import Math
 from svidreader.viewer import MatplotlibViewer
 from svidreader import SVidReader
 from svidreader.cameraprojection import PerspectiveCameraProjection
 from ccvtools import rawio
+
+def find_ignore_escaped(str, tofind):
+    single_quotes = False
+    double_quotes = False
+    escaped = False
+
+    for i in range(len(str)):
+        char = str[i]
+        if single_quotes:
+            if char == "'":
+                single_quotes = False
+            continue
+        if double_quotes:
+            if char == '"':
+                double_quotes = False
+            continue
+        if escaped:
+            escaped = False
+            continue
+        if char == '\\':
+            escaped = True
+            continue
+        if char == "'":
+            single_quotes = True
+            continue
+        if char == '"':
+            double_quotes = True
+            continue
+        if char == tofind:
+            return i
+    return -i
+
+
+def unescape(str):
+    single_quotes = False
+    double_quotes = False
+    escaped = False
+    result = ""
+    for i in range(len(str)):
+        char = str[i]
+        if single_quotes:
+            if char == "'":
+                single_quotes = False
+            continue
+        if double_quotes:
+            if char == '"':
+                double_quotes = False
+            continue
+        if escaped:
+            escaped = False
+            result += char
+            continue
+        if char == '\\':
+            escaped = True
+            continue
+        if char == "'":
+            single_quotes = True
+            continue
+        if char == '"':
+            double_quotes = True
+            continue
+        result +=char
+    return  result
+
 
 def create_filtergraph_from_string(inputs, pipeline):
     filtergraph = {}
@@ -50,9 +118,11 @@ def create_filtergraph_from_string(inputs, pipeline):
             line = line.split(':')
             options = {}
             for opt in line:
-                eqindex = opt.find('=')
-                options[opt[0:eqindex]] = opt[eqindex + 1:len(opt)]
-
+                eqindex = find_ignore_escaped(opt, '=')
+                if eqindex == -1:
+                    options[opt] = None
+                else:
+                    options[opt[0:eqindex]] = unescape(opt[eqindex + 1:len(opt)])
             if effectname == 'cache':
                 assert len(curinputs) == 1
                 last = ImageCache(curinputs[0],maxcount=1000)
@@ -67,17 +137,40 @@ def create_filtergraph_from_string(inputs, pipeline):
                 last = SVidReader(options['input'],cache=False)
             elif effectname == 'permutate':
                 assert len(curinputs) == 1
-                last = PermutateFrames(reader = curinputs[0], permutation=options['input'])
-            elif effectname == "contrast":
+                last = PermutateFrames(reader = curinputs[0], permutation=options.get('input', None), mapping=options.get('map', None))
+            elif effectname == "analyze":
                 assert len(curinputs) == 1
-                last = AnalyzeContrast(curinputs[0])
+                last = AnalyzeImage(curinputs[0])
+            elif effectname == "majority":
+                assert len(curinputs) == 1
+                last = MajorityVote(curinputs[0],  window=int(options.get('window', 10)), scale=float(options.get('scale', 1)), foreground='foreground' in options)
+            elif effectname == "math":
+                last = Math(curinputs, expression=options.get('exp'))
             elif effectname == "crop":
                 assert len(curinputs) == 1
-                sp = options['size'].split('x')
-                last = Crop(curinputs[0], width = int(sp[0]), height=int(sp[1]))
+                w = -1
+                h = -1
+                x = 0
+                y = 0
+                if "size" in options:
+                    sp = options['size'].split('x')
+                    w = int(sp[0])
+                    h = int(sp[0])
+                if "rect" in options:
+                    rect = options['rect']
+                    print(rect)
+                    sp = rect.split('x')
+                    w = int(sp[0])
+                    h = int(sp[1])
+                    x = int(sp[2])
+                    y = int(sp[3])
+                last = Crop(curinputs[0], x = x, y = y, width = w, height=h)
             elif effectname == "perprojection":
                 assert len(curinputs) == 1
                 last = PerspectiveCameraProjection(curinputs[0], config_file=options.get('calibration', None))
+            elif effectname == "scraper":
+                assert len(curinputs) == 1
+                last = VideoScraper(curinputs[0], tokens=options['tokens'])
             elif effectname == "viewer":
                 assert len(curinputs) == 1
                 last = MatplotlibViewer(curinputs[0], backend=options['backend'] if 'backend' in options else "matplotlib")
