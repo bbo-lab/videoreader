@@ -1,8 +1,10 @@
 from svidreader.video_supplier import VideoSupplier
 import numpy as np
-import cupy as cp
+try:
+    import cupy as xp
+except ModuleNotFoundError:
+    import numpy as xp
 class MajorityVote(VideoSupplier):
-
     def __init__(self, reader, window, scale, foreground = True):
         super().__init__(n_frames=reader.n_frames, inputs=(reader,))
         self.window = window
@@ -11,14 +13,12 @@ class MajorityVote(VideoSupplier):
         self.stack = {}
         self.foreground = foreground
 
-    @cp.fuse()
-    def gauss(x,y, scale):
-            diff = (x-y) * (1/scale)
-            return cp.exp(-cp.sum(cp.square(diff),axis=2))
+    @xp.fuse()
+    def gauss(x, y, scale):
+        diff = (x - y) * (1 / scale)
+        return xp.exp(-xp.sum(xp.square(diff), axis=2))
 
     def read(self, index):
-        xp = cp
-        x_gpu = cp.array([1, 2, 3])
         begin = max(0, index - self.window)
         end = min(index + self.window, self.inputs[0].n_frames)
         for i in range(begin, end):
@@ -38,7 +38,7 @@ class MajorityVote(VideoSupplier):
                 for j in np.setdiff1d(should_include, does_include):
                     if j not in self.stack:
                         self.stack[j] = xp.asarray(self.inputs[0].read(index=j))
-                    sum += self.gauss(curimage, self.stack[j], self.scale)
+                    sum = self.gauss( curimage, self.stack[j], self.scale)
                 for j in np.setdiff1d(does_include, should_include):
                     if j not in self.stack:
                         self.stack[j] = xp.asarray(self.inputs[0].read(index=j))
@@ -56,4 +56,4 @@ class MajorityVote(VideoSupplier):
             if k < begin or k > end:
                 del self.stack[k]
         self.cache = cache_next
-        return cp.asnumpy(result)
+        return xp.asnumpy(result)

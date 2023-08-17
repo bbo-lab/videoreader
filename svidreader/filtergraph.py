@@ -1,13 +1,11 @@
 import hashlib
 import imageio.v3 as iio
 from svidreader.imagecache import ImageCache
-from svidreader.videoscraper import VideoScraper
 from svidreader.effects import BgrToGray
 from svidreader.effects import AnalyzeImage
 from svidreader.effects import FrameDifference
 from svidreader.effects import Scale
 from svidreader.effects import Crop
-from svidreader.majorityvote import MajorityVote
 from svidreader.effects import DumpToFile
 from svidreader.effects import Arange
 from svidreader.effects import PermutateFrames
@@ -143,6 +141,7 @@ def create_filtergraph_from_string(inputs, pipeline):
                 last = AnalyzeImage(curinputs[0])
             elif effectname == "majority":
                 assert len(curinputs) == 1
+                from svidreader.majorityvote import MajorityVote
                 last = MajorityVote(curinputs[0],  window=int(options.get('window', 10)), scale=float(options.get('scale', 1)), foreground='foreground' in options)
             elif effectname == "math":
                 last = Math(curinputs, expression=options.get('exp'))
@@ -170,6 +169,7 @@ def create_filtergraph_from_string(inputs, pipeline):
                 last = PerspectiveCameraProjection(curinputs[0], config_file=options.get('calibration', None))
             elif effectname == "scraper":
                 assert len(curinputs) == 1
+                from svidreader.videoscraper import VideoScraper
                 last = VideoScraper(curinputs[0], tokens=options['tokens'])
             elif effectname == "viewer":
                 assert len(curinputs) == 1
