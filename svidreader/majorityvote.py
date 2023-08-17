@@ -19,6 +19,7 @@ class MajorityVote(VideoSupplier):
         return xp.exp(-xp.sum(xp.square(diff), axis=2))
 
     def read(self, index):
+        print(index)
         begin = max(0, index - self.window)
         end = min(index + self.window, self.inputs[0].n_frames)
         for i in range(begin, end):
@@ -38,7 +39,7 @@ class MajorityVote(VideoSupplier):
                 for j in np.setdiff1d(should_include, does_include):
                     if j not in self.stack:
                         self.stack[j] = xp.asarray(self.inputs[0].read(index=j))
-                    sum = self.gauss( curimage, self.stack[j], self.scale)
+                    sum += self.gauss( curimage, self.stack[j], self.scale)
                 for j in np.setdiff1d(does_include, should_include):
                     if j not in self.stack:
                         self.stack[j] = xp.asarray(self.inputs[0].read(index=j))
