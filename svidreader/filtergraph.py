@@ -45,7 +45,19 @@ def find_ignore_escaped(str, tofind):
             continue
         if char == tofind:
             return i
-    return -i
+    return -1
+
+
+def split_ignore_escaped(str, splitChar):
+    result = []
+    while True:
+        index = find_ignore_escaped(str, splitChar)
+        if index == -1:
+            break
+        result.append(str[0:index])
+        str = str[index + 1:-1]
+    result.append(str)
+    return result
 
 
 def unescape(str):
@@ -58,10 +70,14 @@ def unescape(str):
         if single_quotes:
             if char == "'":
                 single_quotes = False
+            else:
+                result += char
             continue
         if double_quotes:
             if char == '"':
                 double_quotes = False
+            else:
+                result += char
             continue
         if escaped:
             escaped = False
@@ -113,7 +129,7 @@ def create_filtergraph_from_string(inputs, pipeline):
             if eqindex != -1:
                 effectname = line[0:eqindex]
                 line = line[eqindex + 1:len(line)]
-            line = line.split(':')
+            line = split_ignore_escaped(line,':')
             options = {}
             for opt in line:
                 eqindex = find_ignore_escaped(opt, '=')
@@ -157,7 +173,6 @@ def create_filtergraph_from_string(inputs, pipeline):
                     h = int(sp[0])
                 if "rect" in options:
                     rect = options['rect']
-                    print(rect)
                     sp = rect.split('x')
                     w = int(sp[0])
                     h = int(sp[1])
