@@ -24,7 +24,8 @@ class DumpToFile(VideoSupplier):
     def read(self, index):
         data = self.inputs[0].read(index=index)
         if self.type == "movie":
-            self.output.append_data(data)
+            if data is not None:
+                self.output.append_data(data)
         elif self.type == "csv":
             if self.mapkeys == None and isinstance(data, dict):
                 self.mapkeys = data.keys()
@@ -69,6 +70,7 @@ class Crop(VideoSupplier):
 class Math(VideoSupplier):
     def __init__(self, reader, expression):
         super().__init__(n_frames=reader[0].n_frames, inputs=reader)
+        print('expression',expression)
         self.exp = compile(expression, '<string>', 'exec')
 
     def read(self, index):
@@ -90,6 +92,29 @@ class AnalyzeImage(VideoSupplier):
         gx += gy
         np.sqrt(gx, out=gx)
         return {'contrast':np.average(gx), 'brightness':np.average(img)}
+
+
+class MaxIndex(VideoSupplier):
+    def __init__(self, reader):
+        super().__init__(n_frames=reader.n_frames, inputs=(reader,))
+
+    def read(self, index):
+        img = self.inputs[0].read(index=index)
+        maxpix = np.argmax(img)
+        maxpix = np.unravel_index(maxpix, img.shape[0:2])
+        return {'x':maxpix[0], 'y':maxpix[1], 'c':img[maxpix[0],maxpix[1]]}
+
+
+class Plot(VideoSupplier):
+    def __init__(self, reader):
+        super().__init__(n_frames=reader.n_frames, input=(reader,))
+
+    def read(self, index):
+        img = self.inputs[0].read(index=index)
+        data = self.inputs[1].read(index=index)
+        img = np.copy(img)
+        cv2.circle(img, (int(data[1]), int(data[0])), 2, (255, 0, 0), 5)
+
 
 class Scale(VideoSupplier):
     def __init__(self, reader, scale):

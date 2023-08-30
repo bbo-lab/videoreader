@@ -11,6 +11,7 @@ from svidreader.effects import Arange
 from svidreader.effects import PermutateFrames
 from svidreader.effects import DumpToFile
 from svidreader.effects import Math
+from svidreader.effects import MaxIndex
 from svidreader.viewer import MatplotlibViewer
 from svidreader import SVidReader
 from svidreader.cameraprojection import PerspectiveCameraProjection
@@ -139,7 +140,7 @@ def create_filtergraph_from_string(inputs, pipeline):
                     options[opt[0:eqindex]] = unescape(opt[eqindex + 1:len(opt)])
             if effectname == 'cache':
                 assert len(curinputs) == 1
-                last = ImageCache(curinputs[0],maxcount=1000)
+                last = ImageCache(curinputs[0], maxcount=options.get('cmax',1000), processes=options.get('num_threads',1), preload=options.get('preload',20))
             elif effectname == 'bgr2gray':
                 assert len(curinputs) == 1
                 last = BgrToGray(curinputs[0])
@@ -159,6 +160,10 @@ def create_filtergraph_from_string(inputs, pipeline):
                 assert len(curinputs) == 1
                 from svidreader.majorityvote import MajorityVote
                 last = MajorityVote(curinputs[0],  window=int(options.get('window', 10)), scale=float(options.get('scale', 1)), foreground='foreground' in options)
+            elif effectname == "light_detector":
+                assert len(curinputs) == 1
+                from svidreader.light_detector import LightDetector
+                last = LightDetector(curinputs[0])
             elif effectname == "math":
                 last = Math(curinputs, expression=options.get('exp'))
             elif effectname == "crop":
@@ -181,19 +186,23 @@ def create_filtergraph_from_string(inputs, pipeline):
                 last = Crop(curinputs[0], x = x, y = y, width = w, height=h)
             elif effectname == "perprojection":
                 assert len(curinputs) == 1
+                print(options)
                 last = PerspectiveCameraProjection(curinputs[0], config_file=options.get('calibration', None))
             elif effectname == "scraper":
                 assert len(curinputs) == 1
                 from svidreader.videoscraper import VideoScraper
                 last = VideoScraper(curinputs[0], tokens=options['tokens'])
+            elif effectname == "argmax":
+                assert len(curinputs) == 1
+                last = MaxIndex(curinputs[0])
             elif effectname == "viewer":
                 assert len(curinputs) == 1
-                last = MatplotlibViewer(curinputs[0], backend=options['backend'] if 'backend' in options else "matplotlib")
+                last = MatplotlibViewer(curinputs[0], backend=options.get('backend','matplotlib'))
             elif effectname == "dump":
                 assert len(curinputs) == 1
                 last = DumpToFile(reader=curinputs[0], outputfile=options['output'])
             elif effectname == "arange":
-                last = Arange(inputs=curinputs, ncols=int(options['ncols']) if 'ncols' in options else -1)
+                last = Arange(inputs=curinputs, ncols=int(options.get('ncols','-1')))
             elif effectname == "scale":
                 assert len(curinputs) == 1
                 last = Scale(reader=curinputs[0], scale=float(options['scale']))

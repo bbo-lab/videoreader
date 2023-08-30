@@ -55,7 +55,7 @@ class MatplotlibViewer(VideoSupplier):
                            '-f', 'rawvideo',
                            '-vcodec', 'rawvideo',
                            '-video_size', str(img.shape[1]) + 'x' + str(img.shape[0]),  # size of one frame
-                           '-pixel_format', 'rgb24' if img.shape[2] == 3 else 'gray8',
+                           '-pixel_format', 'rgb24' if len(img.shape) == 3 and img.shape[2] == 3 else 'gray8',
                            '-framerate', '200',
                            '-i','-']
                 print(command)
