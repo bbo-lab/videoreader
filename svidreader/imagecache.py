@@ -1,11 +1,11 @@
 import threading
 import queue
-from threading import RLock
+from threading import Lock
 import concurrent.futures
 from concurrent.futures import Future
 import sys
 from enum import IntEnum
-
+from multiprocessing.pool import ThreadPool
 import numpy as np
 from svidreader.video_supplier import VideoSupplier
 
@@ -52,39 +52,35 @@ class QueuedLoad():
         return self.priority >= other.priority
 
 
-class PriorityThreadPool:
-    def __init__(self):
+class PriorityThreadPool(ThreadPool):
+    def __init__(self, processes=1):
+        super().__init__(processes = processes)
         self.loadingQueue = queue.PriorityQueue()
-        self.exit = threading.Event()
-        self.wakeup = threading.Event()
-        self.th = threading.Thread(target=self.worker, daemon=True)
-        self.th.start()
-
+        self.first = False
 
     def close(self):
-        self.exit.set()
-        self.wakeup.set()
-        
+        pass
 
     def submit(self,task, priority=0):
         future = Future()
         self.loadingQueue.put(QueuedLoad(task, priority = priority, future = future))
-        self.wakeup.set()
+        if self.first == False:
+            self.apply_async(self.worker)
+            self.first=True
         return future
 
-
     def worker(self):
-        while not self.exit.is_set():
-            self.wakeup.wait()
-            if self.wakeup.is_set():
-                self.wakeup.clear()
-                while not self.loadingQueue.empty():
-                    elem = self.loadingQueue.get()
-                    try:
-                        res = elem.task()
-                        elem.future.set_result(res)
-                    except Exception as e:
-                        elem.future.set_exception(e)
+        try:
+            while True:
+                elem = self.loadingQueue.get(block=True, timeout=1)
+                try:
+                    res = elem.task()
+                    elem.future.set_result(res)
+                except Exception as e:
+                    elem.future.set_exception(e)
+        except:
+            print("timeout")
+            pass
 
 
 class FrameStatus(IntEnum):
@@ -94,25 +90,25 @@ class FrameStatus(IntEnum):
     CACHED = 3
 
 class ImageCache(VideoSupplier):
-    def __init__(self, reader, keyframes = None, maxcount = 100):
+    def __init__(self, reader, keyframes = None, maxcount = 100, processes = 1, preload=20):
         super().__init__(n_frames=reader.n_frames, inputs=(reader,))
         if self.n_frames > 0:
             self.framestatus = np.full(shape=(self.n_frames,),dtype=np.uint8,fill_value=FrameStatus.NOT_CACHED)
         else:
             self.framestatus = {}
         self.verbose = True
-        self.rlock = RLock()
+        self.lock = Lock()
         self.cached = {}
         self.maxcount = maxcount
-        self.maxmemsize = 10000000000
+        self.maxmemsize = 5000000000
         self.curmemsize = 0
         self.th = None
         self.usage_counter = 0
         self.last_read = 0
-        self.num_preload = 20
-        self.connect_segments = 20
+        self.num_preload = preload
+        self.connect_segments = preload
         self.keyframes = keyframes
-        self.ptp = PriorityThreadPool()
+        self.ptp = PriorityThreadPool(processes=processes)
 
 
     def close(self):
@@ -160,7 +156,7 @@ class ImageCache(VideoSupplier):
 
 
     def read_impl(self,index):
-        with self.rlock:
+        with self.lock:
              res = self.cached.get(index)
              if res is not None:
                  return res
@@ -168,11 +164,11 @@ class ImageCache(VideoSupplier):
         if index - self.last_read < self.connect_segments:
             for i in range(self.last_read + 1, index):
                 data = self.inputs[0].read(index=i)
-                with self.rlock:
+                with self.lock:
                     self.add_to_cache(i, data, hash(self.inputs[0]) * 7 + index)
         data = self.inputs[0].read(index=index)
         self.last_read = index
-        with self.rlock:
+        with self.lock:
             res = self.add_to_cache(index, data, hash(self.inputs[0]) * 7 + index)
             self.clean()
             return res
@@ -199,13 +195,13 @@ class ImageCache(VideoSupplier):
 
     def read(self,index=None,blocking=True):
         res = None
-        with self.rlock:
+        with self.lock:
             res = self.cached.get(index)
         if res is None:
             future = self.load(index, lazy=False)
         end = index
         if self.n_frames > 0:
-            end = min(index + self.num_preload, self.n_frames)
+            end = min(index + self.num_preload, self.n_frames - 1)
         for i in range(max(index - self.num_preload, 0), end):
             self.load(index=i, lazy=True)
         if res is not None:
