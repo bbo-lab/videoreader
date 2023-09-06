@@ -96,7 +96,7 @@ def get_reader(filename, backend="decord", cache=False):
     pipe = filename.find("|")
     pipeline = None
     if pipe >= 0:
-        pipeline = filename[pipe + 1:-1]
+        pipeline = filename[pipe + 1:]
         filename = filename[0:pipe]
     if backend == 'iio':
         from svidreader import SVidReader
@@ -109,7 +109,7 @@ def get_reader(filename, backend="decord", cache=False):
     if cache:
         res = ImageCache(res, maxcount=500)
     if pipeline is not None:
-        res = filtergraph.create_filtergraph_from_string([res], pipeline)['out']
+        res = create_filtergraph_from_string([res], pipeline)['out']
     return res
 
 
