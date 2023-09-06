@@ -22,8 +22,13 @@ class VideoSupplier:
         for input in self.inputs:
             input.close()
 
-    def improps(self):
-        return self.inputs[0].improps()
+    def get_shape(self):
+        return self.inputs[0].read(0).shape
+
+    def get_offset(self):
+        if len(self.inputs[0]) == 0:
+            return (0,0)
+        return self.inputs[0].get_offset()
 
     def get_meta_data(self):
         return self.inputs[0].get_meta_data()

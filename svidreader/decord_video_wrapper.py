@@ -12,3 +12,7 @@ class DecordVideoReader(VideoSupplier):
         res = self.vr.get_batch([index]).asnumpy()
         res = res[0]
         return res
+
+
+    def get_meta_data(self):
+        return {"key_indices": self.vr.get_key_indices(), "fps": self.vr.get_avg_fps()}
