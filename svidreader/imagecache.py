@@ -56,7 +56,6 @@ class PriorityThreadPool(ThreadPool):
     def __init__(self, processes=1):
         super().__init__(processes = processes)
         self.loadingQueue = queue.PriorityQueue()
-        self.first = False
 
     def close(self):
         pass
@@ -64,20 +63,17 @@ class PriorityThreadPool(ThreadPool):
     def submit(self,task, priority=0):
         future = Future()
         self.loadingQueue.put(QueuedLoad(task, priority = priority, future = future))
-        if self.first == False:
-            self.apply_async(self.worker)
-            self.first=True
+        self.apply_async(self.worker)
         return future
 
     def worker(self):
         try:
-            while True:
-                elem = self.loadingQueue.get(block=True, timeout=1)
-                try:
-                    res = elem.task()
-                    elem.future.set_result(res)
-                except Exception as e:
-                    elem.future.set_exception(e)
+            elem = self.loadingQueue.get(block=True, timeout=1)
+            try:
+                res = elem.task()
+                elem.future.set_result(res)
+            except Exception as e:
+                elem.future.set_exception(e)
         except:
             print("timeout")
             pass

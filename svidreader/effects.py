@@ -4,6 +4,7 @@ from svidreader.video_supplier import VideoSupplier
 from ccvtools import rawio
 import numpy as np
 
+
 class DumpToFile(VideoSupplier):
     def __init__(self, reader, outputfile):
         import imageio
@@ -95,14 +96,28 @@ class AnalyzeImage(VideoSupplier):
 
 
 class MaxIndex(VideoSupplier):
-    def __init__(self, reader):
+    def __init__(self, reader, count, radius):
         super().__init__(n_frames=reader.n_frames, inputs=(reader,))
+        self.count = int(count)
+        self.radius = int(radius)
 
     def read(self, index):
+        import cv2
         img = self.inputs[0].read(index=index)
-        maxpix = np.argmax(img)
-        maxpix = np.unravel_index(maxpix, img.shape[0:2])
-        return {'x':maxpix[0], 'y':maxpix[1], 'c':img[maxpix[0],maxpix[1]]}
+        img = np.array(img,copy=True)
+        i = 0
+        res = {}
+        while True:
+            maxpix = np.argmax(img)
+            maxpix = np.unravel_index(maxpix, img.shape[0:2])
+            res['x'+str(i)] = maxpix[0]
+            res['y'+str(i)] = maxpix[1]
+            res['c'+str(i)] = img[maxpix[0],maxpix[1]]
+            i = i + 1
+            if i > self.count:
+                break
+            cv2.circle(img, (maxpix[1],maxpix[0]), self.radius, 0, -1)
+        return res
 
 
 class Plot(VideoSupplier):
@@ -113,7 +128,8 @@ class Plot(VideoSupplier):
         img = self.inputs[0].read(index=index)
         data = self.inputs[1].read(index=index)
         img = np.copy(img)
-        cv2.circle(img, (int(data[1]), int(data[0])), 2, (255, 0, 0), 5)
+        cv2.circle(img, (data['x'], data['y']), 2, (255, 0, 0), data['c'])
+        return img
 
 
 class Scale(VideoSupplier):

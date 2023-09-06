@@ -1,6 +1,4 @@
 import svidreader.filtergraph as filtergraph
-from svidreader import SVidReader
-from svidreader import decord_video_wrapper
 from svidreader.imagecache import ImageCache
 import numpy as np
 import argparse
@@ -26,15 +24,9 @@ for f in args.input:
     else:
         raise Exception("File " + f + " not found")
 
+
 for i in range(len(files)):
-    if args.videoreader == 'iio':
-        files[i] = SVidReader(files[i], cache=False)
-    elif args.videoreader == 'decord':
-        files[i] = decord_video_wrapper.DecordVideoReader(files[i])
-    else:
-        raise Exception('Unknown videoreader')
-    if args.autocache == "True":
-        files[i] = ImageCache(files[i], maxcount=500)
+    files[i] = filtergraph.get_reader(files[i], backend=args.videoreader, cache=args.autocache=="True")
 
 
 fg = filtergraph.create_filtergraph_from_string(files, args.filtergraph)

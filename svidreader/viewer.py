@@ -58,9 +58,8 @@ class MatplotlibViewer(VideoSupplier):
                            '-pixel_format', 'rgb24' if len(img.shape) == 3 and img.shape[2] == 3 else 'gray8',
                            '-framerate', '200',
                            '-i','-']
-                print(command)
                 self.pipe = sp.Popen(command, stdin=sp.PIPE, stderr=sp.STDOUT, bufsize=1000, preexec_fn=os.setpgrp)
-            self.pipe.stdin.write(img.tobytes())
+            self.pipe.stdin.write(img.astype(np.uint8).tobytes())
         elif self.backend == "skimage":
             from skimage import io
             io.imshow(img)

@@ -5,13 +5,14 @@ try:
 except ModuleNotFoundError:
     import numpy as xp
 class MajorityVote(VideoSupplier):
-    def __init__(self, reader, window, scale, foreground = True):
+    def __init__(self, reader, window, scale, foreground = False):
         super().__init__(n_frames=reader.n_frames, inputs=(reader,))
         self.window = window
         self.scale = float(scale)
         self.cache = {}
         self.stack = {}
         self.foreground = foreground
+        print(scale, window, foreground)
 
     @xp.fuse()
     def gauss(x, y, scale):
@@ -19,7 +20,6 @@ class MajorityVote(VideoSupplier):
         return xp.exp(-xp.sum(xp.square(diff), axis=2))
 
     def read(self, index):
-        print(index)
         begin = max(0, index - self.window)
         end = min(index + self.window, self.inputs[0].n_frames)
         for i in range(begin, end):

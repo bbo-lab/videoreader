@@ -7,10 +7,22 @@ from cupyx.scipy.ndimage import gaussian_filter
 import cupy as cp
 from cupyx.scipy.ndimage import convolve1d
 import cv2
+from enum import Enum
+
+
+class Mode(Enum):
+    BLINKING = 0
+    CONTINUOUS = 1
+
 
 class LightDetector(VideoSupplier):
-    def __init__(self, reader):
+    def __init__(self, reader, mode):
         super().__init__(n_frames=reader.n_frames, inputs=(reader,))
+        self.cache = {}
+        if mode == "blinking":
+            self.mode = Mode.BLINKING
+        elif mode == "continuous":
+            self.mode = Mode.CONTINUOUS
 
     @staticmethod
     def double_gauss(frame):
@@ -39,18 +51,32 @@ class LightDetector(VideoSupplier):
 
 
     def read(self, index):
-        input = self.inputs[0].read(index=index)
-        lastframe = cp.asarray(input)
-        curframe = cp.asarray(self.inputs[0].read(index=index + 1))
+        if index in self.cache:
+            lastframe = self.cache[index]
+        else:
+            lastframe = cp.asarray(self.inputs[0].read(index=index))
+            lastframe= lastframe.astype(cp.float32)
+            lastframe = cp.square(lastframe)
 
-        lastframe= lastframe.astype(cp.float32)
-        curframe = curframe.astype(cp.float32)
-        lastframe = cp.square(lastframe)
-        curframe = cp.square(curframe)
-        res= self.convolve(cp.sum(curframe- lastframe,axis=2) / 3)
-        res = cp.abs(res)
+        if self.mode == Mode.BLINKING:
+            if index + 1 in self.cache:
+                curframe = self.cache[index + 1]
+            else:
+                curframe = cp.asarray(self.inputs[0].read(index=index + 1))
+                curframe = curframe.astype(cp.float32)
+                curframe = cp.square(curframe)
+        self.cache.clear()
+        divide = 81
+        self.cache[index] = lastframe
+        if self.mode == Mode.BLINKING:
+            self.cache[index + 1] = curframe
+            res= self.convolve(cp.sum(curframe- lastframe,axis=2) / 3)
+            res = cp.abs(res)
+            divide *= 16
+        else:
+            res = lastframe
         res = self.convolve_big(res)
-        res *= 1/(144 * 16)
+        res *= 1/divide
         res = cp.maximum(res, 0)
         res = cp.sqrt(res)
         return cp.asnumpy(res.astype(cp.uint8))

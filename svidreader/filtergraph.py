@@ -1,5 +1,4 @@
 import hashlib
-import imageio.v3 as iio
 from svidreader.imagecache import ImageCache
 from svidreader.effects import BgrToGray
 from svidreader.effects import AnalyzeImage
@@ -12,10 +11,6 @@ from svidreader.effects import PermutateFrames
 from svidreader.effects import DumpToFile
 from svidreader.effects import Math
 from svidreader.effects import MaxIndex
-from svidreader.viewer import MatplotlibViewer
-from svidreader import SVidReader
-from svidreader.cameraprojection import PerspectiveCameraProjection
-from ccvtools import rawio
 
 def find_ignore_escaped(str, tofind):
     single_quotes = False
@@ -97,6 +92,20 @@ def unescape(str):
     return  result
 
 
+def get_reader(filename, backend="decord", cache=False):
+    if backend == 'iio':
+        from svidreader import SVidReader
+        res = SVidReader(filename, cache=False)
+    elif backend == 'decord':
+        from svidreader import decord_video_wrapper
+        res = decord_video_wrapper.DecordVideoReader(filename)
+    else:
+        raise Exception('Unknown videoreader')
+    if cache:
+        res = ImageCache(res, maxcount=500)
+    return res
+
+
 def create_filtergraph_from_string(inputs, pipeline):
     filtergraph = {}
     for i in range(len(inputs)):
@@ -149,7 +158,7 @@ def create_filtergraph_from_string(inputs, pipeline):
                 last = FrameDifference(curinputs[0])
             elif effectname == 'reader':
                 assert noinput
-                last = SVidReader(options['input'],cache=False)
+                last = get_reader(options['input'],cache=False)
             elif effectname == 'permutate':
                 assert len(curinputs) == 1
                 last = PermutateFrames(reader = curinputs[0], permutation=options.get('input', None), mapping=options.get('map', None))
@@ -159,11 +168,11 @@ def create_filtergraph_from_string(inputs, pipeline):
             elif effectname == "majority":
                 assert len(curinputs) == 1
                 from svidreader.majorityvote import MajorityVote
-                last = MajorityVote(curinputs[0],  window=int(options.get('window', 10)), scale=float(options.get('scale', 1)), foreground='foreground' in options)
+                last = MajorityVote(curinputs[0],  window=int(options.get('window', 10)), scale=float(options.get('scale', 1)), foreground=options.get('foreground',False))
             elif effectname == "light_detector":
                 assert len(curinputs) == 1
                 from svidreader.light_detector import LightDetector
-                last = LightDetector(curinputs[0])
+                last = LightDetector(curinputs[0], mode=options.get('mode','blinking'))
             elif effectname == "math":
                 last = Math(curinputs, expression=options.get('exp'))
             elif effectname == "crop":
@@ -186,7 +195,7 @@ def create_filtergraph_from_string(inputs, pipeline):
                 last = Crop(curinputs[0], x = x, y = y, width = w, height=h)
             elif effectname == "perprojection":
                 assert len(curinputs) == 1
-                print(options)
+                from svidreader.cameraprojection import PerspectiveCameraProjection
                 last = PerspectiveCameraProjection(curinputs[0], config_file=options.get('calibration', None))
             elif effectname == "scraper":
                 assert len(curinputs) == 1
@@ -194,9 +203,10 @@ def create_filtergraph_from_string(inputs, pipeline):
                 last = VideoScraper(curinputs[0], tokens=options['tokens'])
             elif effectname == "argmax":
                 assert len(curinputs) == 1
-                last = MaxIndex(curinputs[0])
+                last = MaxIndex(curinputs[0], count=options.get('count',1), radius=options.get('radius',1))
             elif effectname == "viewer":
                 assert len(curinputs) == 1
+                from svidreader.viewer import MatplotlibViewer
                 last = MatplotlibViewer(curinputs[0], backend=options.get('backend','matplotlib'))
             elif effectname == "dump":
                 assert len(curinputs) == 1
