@@ -96,7 +96,7 @@ def get_reader(filename, backend="decord", cache=False):
     pipe = filename.find("|")
     pipeline = None
     if pipe >= 0:
-        pipeline = video[pipe + 1:len(video)]
+        pipeline = filename[pipe + 1:-1]
         filename = filename[0:pipe]
     if backend == 'iio':
         from svidreader import SVidReader
