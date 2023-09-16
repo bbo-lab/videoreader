@@ -64,7 +64,14 @@ class MatplotlibViewer(VideoSupplier):
             self.slider_frame.setValue(0)
             self.textbox_frame = QLineEdit()
 
+            def mouse_clicked(evt):
+                vb = self.graphWidget.plotItem.vb
+                scene_coords = evt.scenePos()
+                if self.graphWidget.sceneBoundingRect().contains(scene_coords):
+                    mouse_point = vb.mapSceneToView(scene_coords)
+                    print(f'clicked plot X: {mouse_point.x()}, Y: {mouse_point.y()}, event: {evt}')
 
+            self.graphWidget.scene().sigMouseClicked.connect(mouse_clicked)
             def redraw(source = None, img=None):
                 self.updating = True
                 self.textbox_frame.setText(str(self.frame))
