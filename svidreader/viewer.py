@@ -36,6 +36,65 @@ class MatplotlibViewer(VideoSupplier):
             self.th = None
             plt.tight_layout()
             plt.show(block=False)
+        if backend == "qt":
+            from matplotlib.widgets import TextBox
+            from PyQt5.QtCore import Qt
+            from PyQt5 import QtWidgets
+            from PyQt5.QtWidgets import QApplication, QVBoxLayout, QLineEdit, QWidget, QSlider
+            from pyqtgraph import PlotWidget, plot
+            import pyqtgraph as pg
+            import sys  # We need sys so that we can pass argv to QApplication
+            import os
+
+            app = QApplication([])
+            self.main_window = QWidget()
+            layout = QVBoxLayout()
+            self.main_window.setLayout(layout)
+            self.graphWidget = pg.PlotWidget()
+            layout.addWidget(self.graphWidget)
+
+            self.updating = True
+            self.img = pg.ImageItem(np.swapaxes(self.read(0), 0, 1))
+            self.updating = False
+            self.graphWidget.addItem(self.img)
+
+            self.slider_frame = QSlider(Qt.Horizontal)
+            self.slider_frame.setMinimum(0)
+            self.slider_frame.setMaximum(self.n_frames)
+            self.slider_frame.setValue(0)
+            self.textbox_frame = QLineEdit()
+
+
+            def redraw(source = None, img=None):
+                self.updating = True
+                self.textbox_frame.setText(str(self.frame))
+                if img is None:
+                    img = self.read(self.frame)
+                if source != self.slider_frame:
+                    self.slider_frame.setValue(self.frame)
+                if source != self.textbox_frame:
+                    self.textbox_frame.setText(str(self.slider_frame.value()))
+                self.img.setImage(np.swapaxes(img, 0, 1))
+                self.updating = False
+            self.redraw = redraw
+
+            def submit_frame():
+                self.frame = int(self.textbox_frame.text())
+                self.redraw(source=self.textbox_frame)
+
+            def submit_slider_frame():
+                self.frame = self.slider_frame.value()
+                self.redraw(source=self.slider_frame)
+
+            self.slider_frame.valueChanged.connect(submit_slider_frame)
+            self.textbox_frame.setText('0')
+            layout.addWidget(self.slider_frame)
+            layout.addWidget(self.textbox_frame)
+            self.textbox_frame.returnPressed.connect(submit_frame)
+            self.main_window.show()
+            app.exec()
+
+
         self.pipe = None
 
     def read(self, index,source=None):
@@ -51,7 +110,7 @@ class MatplotlibViewer(VideoSupplier):
             import os
             import subprocess as sp
             if self.pipe == None:
-                command = ["ffplay",
+                command = ["ffmpeg.ffplay",
                            '-f', 'rawvideo',
                            '-vcodec', 'rawvideo',
                            '-video_size', str(img.shape[1]) + 'x' + str(img.shape[0]),  # size of one frame
@@ -74,6 +133,9 @@ class MatplotlibViewer(VideoSupplier):
                 self.ax.figure.canvas .draw_idle()
                 self.ax.figure.canvas.flush_events()
                 self.updating = False
+        elif self.backend == "qt":
+            if not self.updating:
+                redraw(source = None, img=img)
         else:
             raise Exception("Unknown backend")
         return img
