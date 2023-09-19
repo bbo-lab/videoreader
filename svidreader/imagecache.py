@@ -103,7 +103,7 @@ class ImageCache(VideoSupplier):
         self.last_read = 0
         self.num_preload = preload
         self.connect_segments = preload
-        self.keyframes = keyframes
+        self.keyframes = keyframes if keyframes is not None else reader.get_key_indices()
         self.ptp = PriorityThreadPool(processes=processes)
 
 
@@ -190,6 +190,8 @@ class ImageCache(VideoSupplier):
 
 
     def read(self,index=None,blocking=True):
+        if index >= self.n_frames:
+            raise Exception('Out of bounds, frame ' + str(index) + ' of ' + str(self.n_frames) + 'requested')
         res = None
         with self.lock:
             res = self.cached.get(index)
@@ -198,7 +200,12 @@ class ImageCache(VideoSupplier):
         end = index
         if self.n_frames > 0:
             end = min(index + self.num_preload, self.n_frames - 1)
-        for i in range(max(index - self.num_preload, 0), end):
+        begin = max(index - self.num_preload, 0)
+        if self.keyframes is not None:
+            right_idx = self.keyframes.searchsorted(index,'right')-1
+            begin = 0 if right_idx == 0 else self.keyframes[right_idx]
+            begin = max(begin, index - self.maxcount // 2)
+        for i in range(begin, end):
             self.load(index=i, lazy=True)
         if res is not None:
             res.last_used = self.usage_counter

@@ -6,6 +6,7 @@ import os
 
 parser = argparse.ArgumentParser(description='Process program arguments.')
 parser.add_argument('-i', '--input', nargs='*')
+parser.add_argument('-f', '--frames', nargs='*')
 parser.add_argument('-o', '--output')
 parser.add_argument('-g', '--filtergraph')
 parser.add_argument('-r', '--recursive')
@@ -15,15 +16,19 @@ parser.add_argument('-mp', '--matplotlib', action='store_true', default=False, h
 args = parser.parse_args()
 
 files = []
-for f in args.input:
-    if os.path.isdir(f):
-        if args.recursive:
-            get_files_recursive(f, files)
-    elif os.path.isfile(f):
-        files.append(f)
-    else:
-        raise Exception("File " + f + " not found")
+if args.input is not None:
+    for f in args.input:
+        if os.path.isdir(f):
+            if args.recursive:
+                get_files_recursive(f, files)
+        elif os.path.isfile(f):
+            files.append(f)
+        else:
+            raise Exception("File " + f + " not found")
 
+
+for f in args.frames:
+    files.append(f)
 
 for i in range(len(files)):
     files[i] = filtergraph.get_reader(files[i], backend=args.videoreader, cache=args.autocache=="True")

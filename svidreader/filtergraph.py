@@ -95,19 +95,26 @@ def unescape(str):
 def get_reader(filename, backend="decord", cache=False):
     pipe = filename.find("|")
     pipeline = None
+    res = None
+    processes = 1
     if pipe >= 0:
         pipeline = filename[pipe + 1:]
         filename = filename[0:pipe]
     if backend == 'iio':
-        from svidreader import SVidReader
-        res = SVidReader(filename, cache=False)
+        if filename.endswith("/"):
+            from svidreader import ImageReader
+            res = ImageReader.ImageRange(filename)
+            processes = 10
+        else:
+            from svidreader import SVidReader
+            res = SVidReader(filename, cache=False)
     elif backend == 'decord':
         from svidreader import decord_video_wrapper
         res = decord_video_wrapper.DecordVideoReader(filename)
     else:
         raise Exception('Unknown videoreader')
     if cache:
-        res = ImageCache(res, maxcount=500)
+        res = ImageCache(res, maxcount=200, processes = processes)
     if pipeline is not None:
         res = create_filtergraph_from_string([res], pipeline)['out']
     return res

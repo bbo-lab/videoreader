@@ -22,6 +22,9 @@ class VideoSupplier:
         for input in self.inputs:
             input.close()
 
+    def get_key_indices(self):
+        return self.inputs[0].get_key_indices()
+
     def get_shape(self):
         return self.inputs[0].read(0).shape
 

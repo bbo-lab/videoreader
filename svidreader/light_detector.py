@@ -17,7 +17,7 @@ class Mode(Enum):
 
 class LightDetector(VideoSupplier):
     def __init__(self, reader, mode):
-        super().__init__(n_frames=reader.n_frames, inputs=(reader,))
+        super().__init__(n_frames=reader.n_frames-1, inputs=(reader,))
         self.cache = {}
         if mode == "blinking":
             self.mode = Mode.BLINKING
@@ -50,6 +50,14 @@ class LightDetector(VideoSupplier):
         return res_pos - res_neg
 
 
+    @cp.fuse
+    def normalize(data, divide):
+        data = data * (1/divide)
+        data = cp.maximum(data, 0)
+        data = cp.sqrt(data)
+        return data.astype(cp.uint8)
+
+
     def read(self, index):
         if index in self.cache:
             lastframe = self.cache[index]
@@ -76,7 +84,4 @@ class LightDetector(VideoSupplier):
         else:
             res = lastframe
         res = self.convolve_big(res)
-        res *= 1/divide
-        res = cp.maximum(res, 0)
-        res = cp.sqrt(res)
-        return cp.asnumpy(res.astype(cp.uint8))
+        return cp.asnumpy(self.normalize(res, divide))
