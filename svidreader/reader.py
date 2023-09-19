@@ -1,5 +1,6 @@
 import hashlib
 import imageio.v3 as iio
+import numpy as np
 from svidreader.imagecache import ImageCache
 from ccvtools import rawio
 
@@ -28,6 +29,9 @@ class SVidReader:
         self.reader = iio.imopen(self.video, "r", plugin=self.plugin)
         self.reader.n_frames = self.vprops.shape[0]
         if cache is None:
+            def get_key_indices():
+                return None
+            self.reader.get_key_indices = get_key_indices
             self.reader = ImageCache(self.reader, maxcount=500)
         elif cache != False:
             cache.reader = reader
@@ -118,7 +122,10 @@ class SVidReader:
             return self.hash
 
     def read(self, index):
-        return self.get_data(fr_idx = index)
+        tmp = self.get_data(fr_idx = index)
+        if len(tmp.shape) == 2:
+            tmp = tmp[:,:,np.newaxis]
+        return tmp
 
     def improps(self):
         return self.vprops
