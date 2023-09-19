@@ -27,8 +27,9 @@ if args.input is not None:
             raise Exception("File " + f + " not found")
 
 
-for f in args.frames:
-    files.append(f)
+if args.frames is not None:
+    for f in args.frames:
+        files.append(f)
 
 for i in range(len(files)):
     files[i] = filtergraph.get_reader(files[i], backend=args.videoreader, cache=args.autocache=="True")

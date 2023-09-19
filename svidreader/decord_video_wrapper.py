@@ -10,6 +10,7 @@ class DecordVideoReader(VideoSupplier):
         super().__init__(n_frames=0, inputs=())
         self.closed = False
         self.filename = filename
+        self.video = filename
         self.vr = VideoReader(filename)
         self.n_frames = len(self.vr)
         self.count = 0
@@ -28,12 +29,11 @@ class DecordVideoReader(VideoSupplier):
                     self.last_read = np.inf
 
     def get_key_indices(self):
-        return self.vr.get_key_indices()
+        return np.asarray(self.vr.get_key_indices(),dtype=int)
 
     def close(self):
         self.closed = True
         super().close()
-
 
     def read(self, index):
         print(index, current_thread().name)

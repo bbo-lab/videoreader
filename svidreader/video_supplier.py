@@ -2,6 +2,7 @@ class VideoSupplier:
     def __init__(self, n_frames, inputs = ()):
         self.inputs = inputs
         self.n_frames = n_frames
+        self.shape = None
 
     def __iter__(self):
         return self
@@ -26,7 +27,9 @@ class VideoSupplier:
         return self.inputs[0].get_key_indices()
 
     def get_shape(self):
-        return self.inputs[0].read(0).shape
+        if self.shape is None:
+            self.shape = self.read(0).shape
+        return self.shape
 
     def get_offset(self):
         if len(self.inputs[0]) == 0:

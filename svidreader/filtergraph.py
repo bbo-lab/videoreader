@@ -1,7 +1,6 @@
 import hashlib
 from svidreader.imagecache import ImageCache
 from svidreader.effects import BgrToGray
-from svidreader.effects import AnalyzeImage
 from svidreader.effects import FrameDifference
 from svidreader.effects import Scale
 from svidreader.effects import Crop
@@ -51,7 +50,7 @@ def split_ignore_escaped(str, splitChar):
         if index == -1:
             break
         result.append(str[0:index])
-        str = str[index + 1:-1]
+        str = str[index + 1:]
     result.append(str)
     return result
 
@@ -178,6 +177,7 @@ def create_filtergraph_from_string(inputs, pipeline):
                 last = PermutateFrames(reader = curinputs[0], permutation=options.get('input', None), mapping=options.get('map', None))
             elif effectname == "analyze":
                 assert len(curinputs) == 1
+                from svidreader.analyze_image import AnalyzeImage
                 last = AnalyzeImage(curinputs[0])
             elif effectname == "majority":
                 assert len(curinputs) == 1
@@ -224,7 +224,7 @@ def create_filtergraph_from_string(inputs, pipeline):
                 last = MatplotlibViewer(curinputs[0], backend=options.get('backend','matplotlib'))
             elif effectname == "dump":
                 assert len(curinputs) == 1
-                last = DumpToFile(reader=curinputs[0], outputfile=options['output'])
+                last = DumpToFile(reader=curinputs[0], outputfile=options['output'], makedir='mkdir' in options)
             elif effectname == "arange":
                 last = Arange(inputs=curinputs, ncols=int(options.get('ncols','-1')))
             elif effectname == "scale":

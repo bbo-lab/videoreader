@@ -6,10 +6,14 @@ import numpy as np
 
 
 class DumpToFile(VideoSupplier):
-    def __init__(self, reader, outputfile):
+    def __init__(self, reader, outputfile, makedir = False):
         import imageio
+        print('mkdir',makedir)
         super().__init__(n_frames= reader.n_frames, inputs=(reader,))
         self.outputfile = outputfile
+        if makedir:
+            from pathlib import Path
+            Path(outputfile).parent.mkdir(parents=True, exist_ok=True)
         if outputfile.endswith('.mp4'):
             self.type = "movie"
             self.output =  imageio.get_writer(outputfile)
@@ -81,18 +85,7 @@ class Math(VideoSupplier):
         exec(self.exp, args, ldict)
         return ldict['out']
 
-class AnalyzeImage(VideoSupplier):
-    def __init__(self, reader):
-        super().__init__(n_frames=reader.n_frames, inputs=(reader,))
 
-    def read(self, index):
-        img = self.inputs[0].read(index=index)
-        gy, gx = np.gradient(img, axis=(0, 1))
-        np.square(gx, out=gx)
-        np.square(gy, out=gy)
-        gx += gy
-        np.sqrt(gx, out=gx)
-        return {'contrast':np.average(gx), 'brightness':np.average(img)}
 
 
 class MaxIndex(VideoSupplier):
