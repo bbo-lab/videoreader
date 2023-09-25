@@ -4,12 +4,14 @@ from svidreader.effects import BgrToGray
 from svidreader.effects import FrameDifference
 from svidreader.effects import Scale
 from svidreader.effects import Crop
+from svidreader.effects import ConstFrame
 from svidreader.effects import DumpToFile
 from svidreader.effects import Arange
 from svidreader.effects import PermutateFrames
 from svidreader.effects import DumpToFile
 from svidreader.effects import Math
 from svidreader.effects import MaxIndex
+from svidreader.effects import ChangeFramerate
 
 def find_ignore_escaped(str, tofind):
     single_quotes = False
@@ -119,7 +121,7 @@ def get_reader(filename, backend="decord", cache=False):
     return res
 
 
-def create_filtergraph_from_string(inputs, pipeline):
+def create_filtergraph_from_string(inputs, pipeline, gui_callback=None, options={}):
     filtergraph = {}
     for i in range(len(inputs)):
         filtergraph["input_"+str(i)] = inputs[i]
@@ -178,15 +180,21 @@ def create_filtergraph_from_string(inputs, pipeline):
             elif effectname == "analyze":
                 assert len(curinputs) == 1
                 from svidreader.analyze_image import AnalyzeImage
-                last = AnalyzeImage(curinputs[0])
+                last = AnalyzeImage(curinputs[0], options)
             elif effectname == "majority":
                 assert len(curinputs) == 1
                 from svidreader.majorityvote import MajorityVote
-                last = MajorityVote(curinputs[0],  window=int(options.get('window', 10)), scale=float(options.get('scale', 1)), foreground=options.get('foreground',False))
+                last = MajorityVote(curinputs[0],  window=int(options.get('window', 10)), scale=float(options.get('scale', 1)), foreground='foreground' in options)
+            elif effectname == "change_framerate":
+                assert len(curinputs) == 1
+                last = ChangeFramerate(curinputs[0], factor=float(options.get('factor')))
             elif effectname == "light_detector":
                 assert len(curinputs) == 1
                 from svidreader.light_detector import LightDetector
                 last = LightDetector(curinputs[0], mode=options.get('mode','blinking'))
+            elif effectname == "const":
+                assert len(curinputs) == 1
+                last = ConstFrame(curinputs[0], frame=int(options.get('frame')))
             elif effectname == "math":
                 last = Math(curinputs, expression=options.get('exp'))
             elif effectname == "crop":
@@ -198,14 +206,14 @@ def create_filtergraph_from_string(inputs, pipeline):
                 if "size" in options:
                     sp = options['size'].split('x')
                     w = int(sp[0])
-                    h = int(sp[0])
+                    h = int(sp[1])
                 if "rect" in options:
                     rect = options['rect']
                     sp = rect.split('x')
-                    w = int(sp[0])
-                    h = int(sp[1])
-                    x = int(sp[2])
-                    y = int(sp[3])
+                    x = int(sp[0])
+                    y = int(sp[1])
+                    w = int(sp[2])
+                    h = int(sp[3])
                 last = Crop(curinputs[0], x = x, y = y, width = w, height=h)
             elif effectname == "perprojection":
                 assert len(curinputs) == 1
@@ -221,7 +229,7 @@ def create_filtergraph_from_string(inputs, pipeline):
             elif effectname == "viewer":
                 assert len(curinputs) == 1
                 from svidreader.viewer import MatplotlibViewer
-                last = MatplotlibViewer(curinputs[0], backend=options.get('backend','matplotlib'))
+                last = MatplotlibViewer(curinputs[0], backend=options.get('backend','matplotlib'), gui_callback=gui_callback)
             elif effectname == "dump":
                 assert len(curinputs) == 1
                 last = DumpToFile(reader=curinputs[0], outputfile=options['output'], makedir='mkdir' in options)

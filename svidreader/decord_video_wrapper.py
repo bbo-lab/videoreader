@@ -1,7 +1,6 @@
 from decord import VideoReader, gpu
 import numpy as np
 from svidreader.video_supplier import VideoSupplier
-from threading import current_thread
 from threading import Thread, Lock
 import time
 
@@ -22,7 +21,7 @@ class DecordVideoReader(VideoSupplier):
 
     def seek_end(self):
         while(not self.closed):
-            time.sleep(10)
+            time.sleep(1)
             with self.mutex:
                 if time.time() - self.last_read > 5:
                     self.vr.seek(self.n_frames - 1)
@@ -36,7 +35,6 @@ class DecordVideoReader(VideoSupplier):
         super().close()
 
     def read(self, index):
-        print(index, current_thread().name)
         with self.mutex:
             frame = self.vr.get_batch([index]).asnumpy()
             self.last_read = time.time()

@@ -4,11 +4,13 @@ import threading
 import numpy as np
 
 class MatplotlibViewer(VideoSupplier):
-    def __init__(self, reader, cmap=None, backend="matplotlib"):
+    def __init__(self, reader, cmap=None, backend="matplotlib", gui_callback = None):
         super().__init__(n_frames=reader.n_frames, inputs=(reader,))
         self.backend = backend
         self.exit_event = None
         self.trigger_worker = None
+        self.updating = False
+        self.gui_callback = gui_callback
         if backend == "matplotlib":
             import matplotlib.pyplot as plt
             from matplotlib.widgets import Slider
@@ -37,42 +39,10 @@ class MatplotlibViewer(VideoSupplier):
             plt.tight_layout()
             plt.show(block=False)
         if backend == "qt":
-            from matplotlib.widgets import TextBox
-            from PyQt5.QtCore import Qt
-            from PyQt5 import QtWidgets
-            from PyQt5.QtWidgets import QApplication, QVBoxLayout, QLineEdit, QWidget, QSlider
-            from pyqtgraph import PlotWidget, plot
-            import pyqtgraph as pg
-            import sys  # We need sys so that we can pass argv to QApplication
-            import os
-
-            app = QApplication([])
-            self.main_window = QWidget()
-            layout = QVBoxLayout()
-            self.main_window.setLayout(layout)
-            self.graphWidget = pg.PlotWidget()
-            layout.addWidget(self.graphWidget)
-
-            self.updating = True
-            self.img = pg.ImageItem(np.swapaxes(self.read(0), 0, 1))
-            self.updating = False
-            self.graphWidget.addItem(self.img)
-
-            self.slider_frame = QSlider(Qt.Horizontal)
-            self.slider_frame.setMinimum(0)
-            self.slider_frame.setMaximum(self.n_frames)
-            self.slider_frame.setValue(0)
-            self.textbox_frame = QLineEdit()
-
-            def mouse_clicked(evt):
-                vb = self.graphWidget.plotItem.vb
-                scene_coords = evt.scenePos()
-                if self.graphWidget.sceneBoundingRect().contains(scene_coords):
-                    mouse_point = vb.mapSceneToView(scene_coords)
-                    print(f'clicked plot X: {mouse_point.x()}, Y: {mouse_point.y()}, event: {evt}')
-
-            self.graphWidget.scene().sigMouseClicked.connect(mouse_clicked)
-            def redraw(source = None, img=None):
+            self.gui_loaded = False
+            def redraw(source=None, img=None):
+                if not self.gui_loaded:
+                    return
                 self.updating = True
                 self.textbox_frame.setText(str(self.frame))
                 if img is None:
@@ -83,6 +53,7 @@ class MatplotlibViewer(VideoSupplier):
                     self.textbox_frame.setText(str(self.slider_frame.value()))
                 self.img.setImage(np.swapaxes(img, 0, 1))
                 self.updating = False
+
             self.redraw = redraw
 
             def submit_frame():
@@ -93,14 +64,55 @@ class MatplotlibViewer(VideoSupplier):
                 self.frame = self.slider_frame.value()
                 self.redraw(source=self.slider_frame)
 
-            self.slider_frame.valueChanged.connect(submit_slider_frame)
-            self.textbox_frame.setText('0')
-            layout.addWidget(self.slider_frame)
-            layout.addWidget(self.textbox_frame)
-            self.textbox_frame.returnPressed.connect(submit_frame)
-            self.main_window.show()
-            app.exec()
+            def run_qt():
+                from matplotlib.widgets import TextBox
+                from PyQt5.QtCore import Qt
+                from PyQt5 import QtWidgets
+                from PyQt5.QtWidgets import QApplication, QVBoxLayout, QLineEdit, QWidget, QSlider
+                from pyqtgraph import PlotWidget, plot
+                import pyqtgraph as pg
+                import sys  # We need sys so that we can pass argv to QApplication
+                import os
 
+                self.main_window = QWidget()
+                layout = QVBoxLayout()
+                self.main_window.setLayout(layout)
+                self.graphWidget = pg.PlotWidget()
+                layout.addWidget(self.graphWidget)
+
+                self.updating = True
+                self.img = pg.ImageItem(np.swapaxes(self.read(0), 0, 1))
+                self.updating = False
+                self.graphWidget.addItem(self.img)
+
+                self.slider_frame = QSlider(Qt.Horizontal)
+                self.slider_frame.setMinimum(0)
+                self.slider_frame.setMaximum(self.n_frames)
+                self.slider_frame.setValue(0)
+                self.textbox_frame = QLineEdit()
+
+                def mouse_clicked(evt):
+                    vb = self.graphWidget.plotItem.vb
+                    scene_coords = evt.scenePos()
+                    if self.graphWidget.sceneBoundingRect().contains(scene_coords):
+                        mouse_point = vb.mapSceneToView(scene_coords)
+                        print(f'clicked plot X: {mouse_point.x()}, Y: {mouse_point.y()}, event: {evt}')
+
+                self.graphWidget.scene().sigMouseClicked.connect(mouse_clicked)
+
+
+                self.slider_frame.valueChanged.connect(submit_slider_frame)
+                self.textbox_frame.setText('0')
+                layout.addWidget(self.slider_frame)
+                layout.addWidget(self.textbox_frame)
+                self.textbox_frame.returnPressed.connect(submit_frame)
+                self.main_window.show()
+                self.gui_loaded = True
+            if gui_callback == None:
+                run_qt()
+            else:
+                gui_callback("runqt")
+                gui_callback(run_qt)
 
         self.pipe = None
 
@@ -142,7 +154,7 @@ class MatplotlibViewer(VideoSupplier):
                 self.updating = False
         elif self.backend == "qt":
             if not self.updating:
-                redraw(source = None, img=img)
+                self.redraw(source = None, img=img)
         else:
             raise Exception("Unknown backend")
         return img

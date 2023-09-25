@@ -8,7 +8,6 @@ import numpy as np
 class DumpToFile(VideoSupplier):
     def __init__(self, reader, outputfile, makedir = False):
         import imageio
-        print('mkdir',makedir)
         super().__init__(n_frames= reader.n_frames, inputs=(reader,))
         self.outputfile = outputfile
         if makedir:
@@ -69,7 +68,8 @@ class Crop(VideoSupplier):
 
     def read(self, index):
         img = self.inputs[0].read(index=index)
-        return img[self.x : self.x + self.height, self.y : self.y + self.width]
+        res = img[self.x : self.x + self.height, self.y : self.y + self.width]
+        return res
 
 
 class Math(VideoSupplier):
@@ -177,6 +177,26 @@ class BgrToGray(VideoSupplier):
         img = self.inputs[0].read(index=index // 3)
         return img[:,:,[index % 3]]
 
+
+class ChangeFramerate(VideoSupplier):
+    def __init__(self, reader, factor = 1):
+        super().__init__(n_frames=int(np.round(reader.n_frames / factor)), inputs=(reader,))
+        self.factor = factor
+
+    def read(self, index):
+        return self.inputs[0].read(int(np.round(index * self.factor)))
+
+
+class ConstFrame(VideoSupplier):
+    def __init__(self, reader, frame):
+        super().__init__(n_frames=reader.n_frames * 3, inputs=(reader,))
+        self.frame = frame
+        self.img = None
+
+    def read(self, index):
+        if self.img is None:
+            self.img = self.inputs[0].read(self.frame)
+        return self.img
 
 class FrameDifference(VideoSupplier):
     def __init__(self, reader):

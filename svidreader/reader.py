@@ -147,6 +147,8 @@ class SVidReader:
     def __len__(self):
         return self.n_frames
 
+    def get_key_indices(self):
+        return None
 
 class FrameNotFoundError(Exception):
     pass

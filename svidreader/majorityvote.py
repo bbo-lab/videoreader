@@ -11,48 +11,56 @@ class MajorityVote(VideoSupplier):
         self.scale = float(scale)
         self.cache = {}
         self.stack = {}
+        self.gauss = xp.fuse(MajorityVote.get_gauss(self.scale))
         self.foreground = foreground
         print(scale, window, foreground)
 
-    @xp.fuse()
-    def gauss(x, y, scale):
-        diff = (x - y) * (1 / scale)
-        return xp.exp(-xp.sum(xp.square(diff), axis=2))
+    @staticmethod
+    def get_gauss(scale):
+        scale = 1 / scale
+        def gauss(x, y):
+            diff = (x - y) * scale
+            return xp.exp(-xp.sum(xp.square(diff), axis=2))
+        return gauss
 
     def read(self, index):
         begin = max(0, index - self.window)
-        end = min(index + self.window, self.inputs[0].n_frames)
+        end = min(index + self.window, self.n_frames)
         for i in range(begin, end):
             if i not in self.stack:
                 self.stack[i] = xp.asarray(self.inputs[0].read(index = i))
-        best_sum = xp.full(fill_value=-np.inf, shape=self.stack[begin].shape[0:2], dtype=xp.float32)
-        result  = xp.copy(self.stack[index])
+        shape = self.stack[begin].shape[0:2]
         cache_next = {}
         for i in range(begin, end):
-            sum = xp.zeros_like(best_sum)
+            sum = xp.zeros(shape=shape, dtype=xp.float32)
             curimage = self.stack[i].astype(xp.float32)
             if i in self.cache :
                 ca  = self.cache[i]
-                sum += ca[2]
+                xp.copyto(sum, ca[2])
                 does_include = np.arange(ca[0], ca[1])
                 should_include = np.arange(begin, end)
                 for j in np.setdiff1d(should_include, does_include):
                     if j not in self.stack:
                         self.stack[j] = xp.asarray(self.inputs[0].read(index=j))
-                    sum += self.gauss( curimage, self.stack[j], self.scale)
+                    sum += self.gauss(curimage, self.stack[j])
                 for j in np.setdiff1d(does_include, should_include):
                     if j not in self.stack:
                         self.stack[j] = xp.asarray(self.inputs[0].read(index=j))
-                    sum -= self.gauss(curimage, self.stack[j], self.scale)
+                    sum -= self.gauss(curimage, self.stack[j])
             else:
                 for j in range(begin, end):
-                    sum += self.gauss(curimage, self.stack[j], self.scale)
+                    sum += self.gauss(curimage, self.stack[j])
             cache_next[i] = (begin, end, sum)
-            if self.foreground:
-                sum = -sum
-            mask = best_sum < sum
-            best_sum[mask] = sum[mask]
-            result[mask] = self.stack[i][mask]
+            if i == begin:
+                best_sum = xp.copy(sum)
+                result = xp.copy(self.stack[i])
+            else:
+                if self.foreground:
+                    mask = best_sum > sum
+                else:
+                    mask = best_sum < sum
+                xp.copyto(best_sum, sum, where = mask)
+                xp.copyto(result, self.stack[i], where=mask[:,:,np.newaxis])
         for k, v in list(self.stack.items()):
             if k < begin or k > end:
                 del self.stack[k]
