@@ -68,17 +68,20 @@ class MatplotlibViewer(VideoSupplier):
                 from matplotlib.widgets import TextBox
                 from PyQt5.QtCore import Qt
                 from PyQt5 import QtWidgets
-                from PyQt5.QtWidgets import QApplication, QVBoxLayout, QLineEdit, QWidget, QSlider
+                from PyQt5.QtWidgets import QApplication, QVBoxLayout, QHBoxLayout, QLineEdit, QWidget, QSlider, QComboBox, QPushButton, QButtonGroup
                 from pyqtgraph import PlotWidget, plot
                 import pyqtgraph as pg
                 import sys  # We need sys so that we can pass argv to QApplication
                 import os
 
                 self.main_window = QWidget()
-                layout = QVBoxLayout()
-                self.main_window.setLayout(layout)
+                buttomWidget = QWidget()
+                globalLayout = QVBoxLayout()
+                buttomLayout = QHBoxLayout()
+                buttomWidget.setLayout(buttomLayout)
+                self.main_window.setLayout(globalLayout)
                 self.graphWidget = pg.PlotWidget()
-                layout.addWidget(self.graphWidget)
+                globalLayout.addWidget(self.graphWidget)
 
                 self.updating = True
                 self.img = pg.ImageItem(np.swapaxes(self.read(0), 0, 1))
@@ -90,6 +93,14 @@ class MatplotlibViewer(VideoSupplier):
                 self.slider_frame.setMaximum(self.n_frames)
                 self.slider_frame.setValue(0)
                 self.textbox_frame = QLineEdit()
+                self.buttonPlay = (QPushButton("<"), QPushButton("■"), QPushButton(">"))
+                buttonGroupPlay = QButtonGroup()
+                buttonGroupPlay.setExclusive(True)
+
+                self.comboBoxCopyToClipboard = QComboBox()
+                self.comboBoxCopyToClipboard.addItem('None')
+                self.comboBoxCopyToClipboard.addItem('Coordinate')
+                self.comboBoxCopyToClipboard.addItem('Value')
 
                 def mouse_clicked(evt):
                     vb = self.graphWidget.plotItem.vb
@@ -97,14 +108,26 @@ class MatplotlibViewer(VideoSupplier):
                     if self.graphWidget.sceneBoundingRect().contains(scene_coords):
                         mouse_point = vb.mapSceneToView(scene_coords)
                         print(f'clicked plot X: {mouse_point.x()}, Y: {mouse_point.y()}, event: {evt}')
+                        match str(self.comboBoxCopyToClipboard.currentText()):
+                            case 'Coordinate':
+                                import pyperclip
+                                pyperclip.copy(",".join([str(p) for p in (mouse_point.x(), mouse_point.y())]))
+                            case 'Value':
+                                pass
 
                 self.graphWidget.scene().sigMouseClicked.connect(mouse_clicked)
-
-
                 self.slider_frame.valueChanged.connect(submit_slider_frame)
                 self.textbox_frame.setText('0')
-                layout.addWidget(self.slider_frame)
-                layout.addWidget(self.textbox_frame)
+                self.textbox_frame.setMaximumWidth(100)
+                globalLayout.addWidget(buttomWidget)
+                buttomLayout.addWidget(self.slider_frame)
+                for button in self.buttonPlay:
+                    button.setCheckable(True)
+                    button.setMaximumWidth(30)
+                    buttonGroupPlay.addButton(button)
+                    buttomLayout.addWidget(button)
+                buttomLayout.addWidget(self.textbox_frame)
+                buttomLayout.addWidget(self.comboBoxCopyToClipboard)
                 self.textbox_frame.returnPressed.connect(submit_frame)
                 self.main_window.show()
                 self.gui_loaded = True
