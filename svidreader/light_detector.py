@@ -1,12 +1,4 @@
 from svidreader.video_supplier import VideoSupplier
-import numpy as np
-from scipy.ndimage import convolve1d
-import skimage
-from cupyx.scipy.ndimage import gaussian_filter1d
-from cupyx.scipy.ndimage import gaussian_filter
-import cupy as cp
-from cupyx.scipy.ndimage import convolve1d
-import cv2
 from enum import Enum
 
 
@@ -23,65 +15,79 @@ class LightDetector(VideoSupplier):
             self.mode = Mode.BLINKING
         elif mode == "continuous":
             self.mode = Mode.CONTINUOUS
+        import cupy as cp
+        import cupyx.scipy.ndimage
+
+        self.normalize = cp.fuse(LightDetector.get_normalize(cp))
+        self.convolve = LightDetector.get_convolve(cp, cupyx.scipy.ndimage)
+        self.convolve_big = LightDetector.get_convolve_big(cp, cupyx.scipy.ndimage)
+
 
     @staticmethod
-    def double_gauss(frame):
-        return gaussian_filter(frame, sigma=5, truncate=3.5) - gaussian_filter(frame, sigma=2, truncate=5)
-
-
-    @staticmethod
-    def convolve(res):
-        weights_pos = cp.asarray([1, 2, 1])
-        weights_neg= cp.asarray([1, 1, 0, 0,0,0, 0, 1, 1])
-        res_pos = convolve1d(res, weights_pos, axis=0)
-        res_pos = convolve1d(res_pos, weights_pos, axis=1)
-        res_neg = convolve1d(res, weights_neg, axis=0)
-        res_neg = convolve1d(res_neg, weights_neg, axis=1)
-        return res_pos - res_neg
+    def get_double_gauss(xp):
+        def double_gauss(frame):
+            return xp.gaussian_filter(frame, sigma=5, truncate=3.5) - xp.gaussian_filter(frame, sigma=2, truncate=5)
+        return double_gauss
 
     @staticmethod
-    def convolve_big(res):
-        weights_pos = cp.asarray([2, 5, 2])
-        weights_neg= cp.asarray([1, 2, 2, 2, 1, 0,0,0,0,0, 1, 2, 2, 2, 1])
-        res_pos = convolve1d(res, weights_pos, axis=0)
-        res_pos = convolve1d(res_pos, weights_pos, axis=1)
-        res_neg = convolve1d(res, weights_neg, axis=0)
-        res_neg = convolve1d(res_neg, weights_neg, axis=1)
-        return res_pos - res_neg
+    def get_convolve(xp,ndimg):
+        weights_pos = xp.asarray([1, 2, 1])
+        weights_neg= xp.asarray([1, 1, 0, 0,0,0, 0, 1, 1])
+        def convolve_impl(res):
+            res_pos = ndimg.convolve1d(res, weights_pos, axis=0)
+            res_pos = ndimg.convolve1d(res_pos, weights_pos, axis=1)
+            res_neg = ndimg.convolve1d(res, weights_neg, axis=0)
+            res_neg = ndimg.convolve1d(res_neg, weights_neg, axis=1)
+            return res_pos - res_neg
+        return convolve_impl
 
+    @staticmethod
+    def get_convolve_big(xp,ndimg):
+        weights_pos = xp.asarray([2, 5, 2])
+        weights_neg= xp.asarray([1, 2, 2, 2, 1, 0,0,0,0,0, 1, 2, 2, 2, 1])
+        def convolve_big_impl(res):
+            res_pos = ndimg.convolve1d(res, weights_pos, axis=0)
+            res_pos = ndimg.convolve1d(res_pos, weights_pos, axis=1)
+            res_neg = ndimg.convolve1d(res, weights_neg, axis=0)
+            res_neg = ndimg.convolve1d(res_neg, weights_neg, axis=1)
+            return res_pos - res_neg
+        return convolve_big_impl
 
-    @cp.fuse
-    def normalize(data, divide):
-        data = data * (1/divide)
-        data = cp.maximum(data, 0)
-        data = cp.sqrt(data)
-        return data.astype(cp.uint8)
-
+    @staticmethod
+    def get_normalize(xp):
+        def normalize_impl(data, divide):
+            data = data * (1 / divide)
+            data = xp.maximum(data, 0)
+            data = xp.sqrt(data)
+            return data.astype(xp.uint8)
+        return normalize_impl
 
     def read(self, index):
+        import cupy as cp
+        xp = cp
         if index in self.cache:
             lastframe = self.cache[index]
         else:
-            lastframe = cp.asarray(self.inputs[0].read(index=index))
-            lastframe= lastframe.astype(cp.float32)
-            lastframe = cp.square(lastframe)
+            lastframe = xp.asarray(self.inputs[0].read(index=index))
+            lastframe= lastframe.astype(xp.float32)
+            lastframe = xp.square(lastframe)
 
         if self.mode == Mode.BLINKING:
             if index + 1 in self.cache:
                 curframe = self.cache[index + 1]
             else:
-                curframe = cp.asarray(self.inputs[0].read(index=index + 1))
-                curframe = curframe.astype(cp.float32)
-                curframe = cp.square(curframe)
+                curframe = xp.asarray(self.inputs[0].read(index=index + 1))
+                curframe = curframe.astype(xp.float32)
+                curframe = xp.square(curframe)
         self.cache.clear()
         divide = 81
         self.cache[index] = lastframe
         if self.mode == Mode.BLINKING:
             self.cache[index + 1] = curframe
-            res= self.convolve(cp.sum(curframe- lastframe,axis=2) / 3)
-            res = cp.abs(res)
-            divide *= 16
+            res= self.convolve(xp.sum(curframe- lastframe,axis=2))
+            res = xp.abs(res)
+            divide *= 16 * 3
         else:
             res = lastframe
         res = self.convolve_big(res)
-        return cp.asnumpy(self.normalize(res, divide))
+        return xp.asnumpy(self.normalize(res, divide))
