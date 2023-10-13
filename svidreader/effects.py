@@ -1,3 +1,4 @@
+import pandas
 from svidreader.video_supplier import VideoSupplier
 import numpy as np
 
@@ -137,11 +138,20 @@ def read_numbers(filename):
     with open(filename, 'r') as f:
         return np.asarray([int(x) for x in f],dtype=int)
 
-def read_map(filename):
+def read_map(filename, source = 'from', destination='to'):
     res = {}
     import pandas as pd
     csv = pd.read_csv(filename, sep=' ')
-    return dict(zip(csv['from'], csv['to']))
+    def get_variable(csv, index):
+        if isnumeric(index):
+            index = int(index)
+        if isinstance(index, int):
+            if index == -1:
+                return np.asarray(csv.iloc[:, index])
+            return np.arange(csv.shape[0])
+        if isinstance(index, str):
+            return np.asarray(csv[:, index])
+    return dict(zip(get_variable(csv, source), get_variable(csv, destination)))
 
 
 class TimeToFrame(VideoSupplier):
@@ -151,11 +161,11 @@ class TimeToFrame(VideoSupplier):
 
 
 class PermutateFrames(VideoSupplier):
-    def __init__(self, reader, permutation=None, mapping=None):
+    def __init__(self, reader, permutation=None, mapping=None, source='from', destination='to'):
         if isinstance(permutation, str):
             permutation = read_numbers(permutation)
         if isinstance(mapping, str):
-            permutation = read_map(mapping)
+            permutation = read_map(mapping, source, destination)
         self.permutation = permutation
         self.invalid = np.zeros_like(reader.read(index=0))
         super().__init__(n_frames=len(permutation), inputs=(reader,))

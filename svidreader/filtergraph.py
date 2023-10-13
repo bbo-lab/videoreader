@@ -176,7 +176,11 @@ def create_filtergraph_from_string(inputs, pipeline, gui_callback=None, options=
                 last = get_reader(options['input'],cache=False)
             elif effectname == 'permutate':
                 assert len(curinputs) == 1
-                last = PermutateFrames(reader = curinputs[0], permutation=options.get('input', None), mapping=options.get('map', None))
+                last = PermutateFrames(reader = curinputs[0],
+                                       permutation=options.get('input', None),
+                                       mapping=options.get('map', None),
+                                       input=options.get('source','from'),
+                                       output=options.get('destination','to'))
             elif effectname == "analyze":
                 assert len(curinputs) == 1
                 from svidreader.analyze_image import AnalyzeImage
