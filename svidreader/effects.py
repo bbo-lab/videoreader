@@ -1,4 +1,3 @@
-import pandas
 from svidreader.video_supplier import VideoSupplier
 import numpy as np
 
@@ -156,7 +155,7 @@ def read_map(filename, source = 'from', destination='to'):
 
 class TimeToFrame(VideoSupplier):
     def __init__(self, reader, timingfile):
-        import pandas
+        import pandas as pd
         timings = pd.read_csv(timingfile)
 
 
