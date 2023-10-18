@@ -2,6 +2,7 @@ class VideoSupplier:
     def __init__(self, n_frames, inputs = ()):
         self.inputs = inputs
         self.n_frames = n_frames
+        self.frame_idx = 0
         self.shape = None
 
     def __iter__(self):
@@ -40,6 +41,7 @@ class VideoSupplier:
         return self.inputs[0].get_meta_data()
 
     def get_data(self, index):
+        self.frame_idx = index
         return self.read(index)
 
     def __hash__(self):

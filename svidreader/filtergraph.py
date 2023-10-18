@@ -173,7 +173,7 @@ def create_filtergraph_from_string(inputs, pipeline, gui_callback=None, options=
                 last = FrameDifference(curinputs[0])
             elif effectname == 'reader':
                 assert noinput
-                last = get_reader(options['input'],cache=False)
+                last = get_reader(options['input'], backend=options.get("backend", "iio"), cache=False)
             elif effectname == 'permutate':
                 assert len(curinputs) == 1
                 last = PermutateFrames(reader = curinputs[0],
