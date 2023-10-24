@@ -1,11 +1,12 @@
 import hashlib
 import imageio.v3 as iio
 import numpy as np
+from svidreader.video_supplier import VideoSupplier
 from svidreader.imagecache import ImageCache
 from ccvtools import rawio
 
 
-class SVidReader:
+class SVidReader(VideoSupplier):
     def __init__(self, video, calc_hashes=False, hash_iterator=iter, cache=None):
         video = str(video)
 
@@ -15,7 +16,6 @@ class SVidReader:
         self.last_frame = -1
         self.has_issues = False
         self.plugin = "pyav"
-        self.frame_idx = 0
         self.hash = None
 
         if video[-4:] == '.ccv':
@@ -64,7 +64,6 @@ class SVidReader:
         self.reader.close()
 
     def get_data(self, fr_idx):
-        self.frame_idx = fr_idx
         requ_idx = fr_idx
         # If we know this file is problematic, start with one frame earlier, as going backwards is expensive
         if self.has_issues and requ_idx >= 1 and self.last_frame + 1 != fr_idx:
@@ -132,17 +131,6 @@ class SVidReader:
 
     def get_meta_data(self):
         return self.mdata
-
-    def __iter__(self):
-        return self
-
-    def __next__(self):
-        if (self.frame_idx + 1) < self.n_frames:
-            self.frame_idx += 1
-            return self.get_data(self.frame_idx)
-        else:
-            print("Reached end")
-            raise StopIteration
 
     def __len__(self):
         return self.n_frames
