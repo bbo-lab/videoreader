@@ -73,6 +73,7 @@ class MatplotlibViewer(VideoSupplier):
                 import pyqtgraph as pg
                 import sys  # We need sys so that we can pass argv to QApplication
                 import os
+                from PyQt5.QtCore import QTimer
 
                 self.main_window = QWidget()
                 buttomWidget = QWidget()
@@ -126,6 +127,32 @@ class MatplotlibViewer(VideoSupplier):
                     button.setMaximumWidth(30)
                     buttonGroupPlay.addButton(button)
                     buttomLayout.addWidget(button)
+
+                self.play = 0
+                def run_through_frames():
+                    self.frame += self.play
+                    print(self.frame)
+                    self.redraw(source=buttonGroupPlay)
+
+                self.timer = QTimer(self.main_window)
+                self.timer.setSingleShot(False)
+                self.timer.setInterval(20)  # in milliseconds, so 5000 = 5 seconds
+                self.timer.timeout.connect(run_through_frames)
+
+                def buttonPlayClicked(object):
+                    buttonGroupPlay.id(object)
+                    if object.text() == '<' or object.text() == '>':
+                        self.timer.start()
+                        if object.text() == '<':
+                            self.play = -1
+                        if object.text() == '>':
+                            self.play = 1
+                    if object.text() == '■':
+                        self.timer.stop()
+                        self.play = 0
+                    print("Key was pressed, id is:", object.text())
+
+                buttonGroupPlay.buttonClicked.connect(buttonPlayClicked)
                 buttomLayout.addWidget(self.textbox_frame)
                 buttomLayout.addWidget(self.comboBoxCopyToClipboard)
                 self.textbox_frame.returnPressed.connect(submit_frame)
