@@ -2,11 +2,10 @@ class VideoSupplier:
     def __init__(self, n_frames, inputs = ()):
         self.inputs = inputs
         self.n_frames = n_frames
-        self.frame_idx = 0
         self.shape = None
 
     def __iter__(self):
-        return self
+        return VideoIterator(inputs=self.inputs)
 
     def __len__(self):
         return self.n_frames
@@ -41,7 +40,6 @@ class VideoSupplier:
         return self.inputs[0].get_meta_data()
 
     def get_data(self, index):
-        self.frame_idx = index
         return self.read(index)
 
     def __hash__(self):
@@ -49,6 +47,12 @@ class VideoSupplier:
         for i in self.inputs:
             res = res * 7 + hash(i)
         return res
+
+class VideoIterator(VideoSupplier):
+    def __init__(self, inputs=()):
+        super().__init__(n_frames = inputs[0].n_frames, inputs=inputs)
+        self.frame_idx = 0
+        self.read = inputs[0].read
 
     def __next__(self):
         if (self.frame_idx + 1) < self.n_frames:
