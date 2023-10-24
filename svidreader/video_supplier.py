@@ -5,7 +5,7 @@ class VideoSupplier:
         self.shape = None
 
     def __iter__(self):
-        return VideoIterator(inputs=self.inputs)
+        return VideoIterator(reader=self)
 
     def __len__(self):
         return self.n_frames
@@ -49,15 +49,13 @@ class VideoSupplier:
         return res
 
 class VideoIterator(VideoSupplier):
-    def __init__(self, inputs=()):
-        super().__init__(n_frames = inputs[0].n_frames, inputs=inputs)
+    def __init__(self, reader):
+        super().__init__(n_frames = reader.n_frames, inputs=(reader,))
         self.frame_idx = 0
-        self.read = inputs[0].read
 
     def __next__(self):
-        if (self.frame_idx + 1) < self.n_frames:
+        if self.frame_idx + 1 < self.n_frames:
             self.frame_idx += 1
-            return self.read(self.frame_idx)
+            return self.inputs[0].read(self.frame_idx)
         else:
-            print("Reached end")
             raise StopIteration
