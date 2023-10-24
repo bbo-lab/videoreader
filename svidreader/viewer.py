@@ -131,7 +131,6 @@ class MatplotlibViewer(VideoSupplier):
                 self.play = 0
                 def run_through_frames():
                     self.frame += self.play
-                    print(self.frame)
                     self.redraw(source=buttonGroupPlay)
 
                 self.timer = QTimer(self.main_window)
@@ -150,7 +149,6 @@ class MatplotlibViewer(VideoSupplier):
                     if object.text() == '■':
                         self.timer.stop()
                         self.play = 0
-                    print("Key was pressed, id is:", object.text())
 
                 buttonGroupPlay.buttonClicked.connect(buttonPlayClicked)
                 buttomLayout.addWidget(self.textbox_frame)
