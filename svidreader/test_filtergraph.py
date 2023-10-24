@@ -20,5 +20,20 @@ class TestStringMethods(unittest.TestCase):
             reader.get_data(i)
 
 
+    def test_performance(self):
+        import time
+        reader = filtergraph.get_reader("./test/cubes.mp4|analyze", cache=True)
+        reader.get_data(0)
+        starttime = time.time()
+        for i in range(1, 301):
+            reader.get_data(i)
+        print("ran at ", 300 / (time.time() - starttime), "fps")
+
+        starttime = time.time()
+        for frame in reader:
+            reader.get_data(i)
+        print("ran at ", len(reader) / (time.time() - starttime), "fps")
+
+
 if __name__ == '__main__':
     unittest.main()
