@@ -22,7 +22,7 @@ class TestStringMethods(unittest.TestCase):
 
     def test_performance(self):
         import time
-        reader = filtergraph.get_reader("./test/cubes.mp4|analyze", cache=True)
+        reader = filtergraph.get_reader("./test/cubes.mp4|analyze", cache=True, options={'lib':'np'})
         reader.get_data(0)
         starttime = time.time()
         for i in range(1, 301):

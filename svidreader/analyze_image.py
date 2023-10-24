@@ -1,9 +1,7 @@
-from numba import jit
 from svidreader.video_supplier import VideoSupplier
 import numpy as np
 from functools import partial
 
-@jit(nopython=True, fastmath=True)
 def gradient2d(f=[[[]]]):
     out = np.empty_like(f, np.float32)
     out[1:-1] = (f[2:] - f[:-2])
@@ -12,7 +10,6 @@ def gradient2d(f=[[[]]]):
     return out
 
 
-@jit(nopython=True, fastmath=True)
 def analyze(img=[[[]]]):
     gx = gradient2d(img)
     gy = gradient2d(img.T).T
@@ -43,27 +40,39 @@ class AnalyzeImage(VideoSupplier):
         elif self.lib == 'jax':
             import jax
             self.sqnorm = jax.jit(sqnorm(jax.numpy))
+        elif self.lib == 'nb':
+            import numba as nb
+            self.sqnorm = nb.jit(sqnorm(np))
         else:
             self.sqnorm = sqnorm(np)
 
 
     def read(self, index):
         img = self.inputs[0].read(index=index)
+        contrast = 0
+        brightness = 0
         if self.lib == 'cupy':
             import cupy as cp
             img = cp.asarray(img, dtype=cp.float32)
             gy, gx = cp.gradient(img, axis=(0, 1))
-            return {'contrast':cp.average(self.sqnorm(gx,gy)), 'brightness':cp.average(img)}
-        if self.lib == 'jax':
+            contrast = cp.average(self.sqnorm(gx,gy))
+            brightness = cp.average(img)
+        elif self.lib == 'jax':
             import jax
             img = jax.numpy.asarray(img, dtype = jax.numpy.float32)
             img = jax.device_put(img, device=jax.devices('gpu')[0])
             gy, gx = jax.numpy.gradient(img, axis=(0, 1))
-            return {'contrast':jax.numpy.average(self.sqnorm(gx,gy)), 'brightness':jax.numpy.average(img)}
-
-        if False:
+            contrast = jax.numpy.average(self.sqnorm(gx,gy))
+            brightness = jax.numpy.average(img)
+        elif self.lib == 'nb':
+            import numba as nb
+            self.analyze = nb.jit(analyze)
             cr, av = analyze(img.astype(np.float32))
-            return {'contrast': cr, 'brightness': av}
-        gy, gx = np.gradient(img.astype(np.float32), axis=(0, 1))
-        gx = self.sqnorm(gx, gy)
-        return {'contrast':np.average(gx), 'brightness':np.average(img)}
+            contrast = cr
+            brightness = av
+        else:
+            gy, gx = np.gradient(img.astype(np.float32), axis=(0, 1))
+            gx = self.sqnorm(gx, gy)
+            contrast = np.average(gx)
+            brightness = np.average(img)
+        return {'contrast': contrast, 'brightness': brightness}

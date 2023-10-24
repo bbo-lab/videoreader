@@ -93,7 +93,7 @@ def unescape(str):
     return  result
 
 
-def get_reader(filename, backend="decord", cache=False):
+def get_reader(filename, backend="decord", cache=False, options={}):
     pipe = filename.find("|")
     pipeline = None
     res = None
@@ -117,7 +117,7 @@ def get_reader(filename, backend="decord", cache=False):
     if cache:
         res = ImageCache(res, maxcount=200, processes = processes)
     if pipeline is not None:
-        res = create_filtergraph_from_string([res], pipeline)['out']
+        res = create_filtergraph_from_string([res], pipeline, options=options)['out']
     return res
 
 
@@ -155,16 +155,16 @@ def create_filtergraph_from_string(inputs, pipeline, gui_callback=None, options=
                 effectname = line[0:eqindex]
                 line = line[eqindex + 1:len(line)]
             line = split_ignore_escaped(line,':')
-            options = {}
+            effect_options = options.copy()
             for opt in line:
                 eqindex = find_ignore_escaped(opt, '=')
                 if eqindex == -1:
-                    options[opt] = None
+                    effect_options[opt] = None
                 else:
-                    options[opt[0:eqindex]] = unescape(opt[eqindex + 1:len(opt)])
+                    effect_options[opt[0:eqindex]] = unescape(opt[eqindex + 1:len(opt)])
             if effectname == 'cache':
                 assert len(curinputs) == 1
-                last = ImageCache(curinputs[0], maxcount=options.get('cmax',1000), processes=options.get('num_threads',1), preload=options.get('preload',20))
+                last = ImageCache(curinputs[0], maxcount=effect_options.get('cmax',1000), processes=effect_options.get('num_threads',1), preload=effect_options.get('preload',20))
             elif effectname == 'bgr2gray':
                 assert len(curinputs) == 1
                 last = BgrToGray(curinputs[0])
@@ -173,46 +173,46 @@ def create_filtergraph_from_string(inputs, pipeline, gui_callback=None, options=
                 last = FrameDifference(curinputs[0])
             elif effectname == 'reader':
                 assert noinput
-                last = get_reader(options['input'], backend=options.get("backend", "iio"), cache=False)
+                last = get_reader(effect_options['input'], backend=effect_options.get("backend", "iio"), cache=False)
             elif effectname == 'permutate':
                 assert len(curinputs) == 1
                 last = PermutateFrames(reader = curinputs[0],
-                                       permutation=options.get('input', None),
-                                       mapping=options.get('map', None),
-                                       source=options.get('source','from'),
-                                       destination=options.get('destination','to'))
+                                       permutation=effect_options.get('input', None),
+                                       mapping=effect_options.get('map', None),
+                                       source=effect_options.get('source','from'),
+                                       destination=effect_options.get('destination','to'))
             elif effectname == "analyze":
                 assert len(curinputs) == 1
                 from svidreader.analyze_image import AnalyzeImage
-                last = AnalyzeImage(curinputs[0], options)
+                last = AnalyzeImage(curinputs[0], effect_options)
             elif effectname == "majority":
                 assert len(curinputs) == 1
                 from svidreader.majorityvote import MajorityVote
-                last = MajorityVote(curinputs[0],  window=int(options.get('window', 10)), scale=float(options.get('scale', 1)), foreground='foreground' in options)
+                last = MajorityVote(curinputs[0],  window=int(effect_options.get('window', 10)), scale=float(effect_options.get('scale', 1)), foreground='foreground' in effect_options)
             elif effectname == "change_framerate":
                 assert len(curinputs) == 1
-                last = ChangeFramerate(curinputs[0], factor=float(options.get('factor')))
+                last = ChangeFramerate(curinputs[0], factor=float(effect_options.get('factor')))
             elif effectname == "light_detector":
                 assert len(curinputs) == 1
                 from svidreader.light_detector import LightDetector
-                last = LightDetector(curinputs[0], mode=options.get('mode','blinking'))
+                last = LightDetector(curinputs[0], mode=effect_options.get('mode','blinking'))
             elif effectname == "const":
                 assert len(curinputs) == 1
-                last = ConstFrame(curinputs[0], frame=int(options.get('frame')))
+                last = ConstFrame(curinputs[0], frame=int(effect_options.get('frame')))
             elif effectname == "math":
-                last = Math(curinputs, expression=options.get('exp'))
+                last = Math(curinputs, expression=effect_options.get('exp'))
             elif effectname == "crop":
                 assert len(curinputs) == 1
                 w = -1
                 h = -1
                 x = 0
                 y = 0
-                if "size" in options:
-                    sp = options['size'].split('x')
+                if "size" in effect_options:
+                    sp = effect_options['size'].split('x')
                     w = int(sp[0])
                     h = int(sp[1])
-                if "rect" in options:
-                    rect = options['rect']
+                if "rect" in effect_options:
+                    rect = effect_options['rect']
                     sp = rect.split('x')
                     x = int(sp[0])
                     y = int(sp[1])
@@ -222,26 +222,26 @@ def create_filtergraph_from_string(inputs, pipeline, gui_callback=None, options=
             elif effectname == "perprojection":
                 assert len(curinputs) == 1
                 from svidreader.cameraprojection import PerspectiveCameraProjection
-                last = PerspectiveCameraProjection(curinputs[0], config_file=options.get('calibration', None))
+                last = PerspectiveCameraProjection(curinputs[0], config_file=effect_options.get('calibration', None))
             elif effectname == "scraper":
                 assert len(curinputs) == 1
                 from svidreader.videoscraper import VideoScraper
-                last = VideoScraper(curinputs[0], tokens=options['tokens'])
+                last = VideoScraper(curinputs[0], tokens=effect_options['tokens'])
             elif effectname == "argmax":
                 assert len(curinputs) == 1
-                last = MaxIndex(curinputs[0], count=options.get('count',1), radius=options.get('radius',1))
+                last = MaxIndex(curinputs[0], count=effect_options.get('count',1), radius=effect_options.get('radius',1))
             elif effectname == "viewer":
                 assert len(curinputs) == 1
                 from svidreader.viewer import MatplotlibViewer
-                last = MatplotlibViewer(curinputs[0], backend=options.get('backend','matplotlib'), gui_callback=gui_callback)
+                last = MatplotlibViewer(curinputs[0], backend=effect_options.get('backend','matplotlib'), gui_callback=gui_callback)
             elif effectname == "dump":
                 assert len(curinputs) == 1
-                last = DumpToFile(reader=curinputs[0], outputfile=options['output'], makedir='mkdir' in options)
+                last = DumpToFile(reader=curinputs[0], outputfile=effect_options['output'], makedir='mkdir' in effect_options)
             elif effectname == "arange":
-                last = Arange(inputs=curinputs, ncols=int(options.get('ncols','-1')))
+                last = Arange(inputs=curinputs, ncols=int(effect_options.get('ncols','-1')))
             elif effectname == "scale":
                 assert len(curinputs) == 1
-                last = Scale(reader=curinputs[0], scale=float(options['scale']))
+                last = Scale(reader=curinputs[0], scale=float(effect_options['scale']))
             else:
                 raise Exception("Effectname " + effectname + " not known")
             for out in curoutputs:
