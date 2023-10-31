@@ -142,8 +142,11 @@ def read_map(filename, source = 'from', destination='to'):
     import pandas as pd
     csv = pd.read_csv(filename, sep=' ')
     def get_variable(csv, index):
-        if isinstance(index, str) and index.isnumeric():
-            index = int(index)
+        if isinstance(index, str):
+            if index.isnumeric():
+                index = int(index)
+            if len(index) != 0 and index[0] == '-' and index[1:].isnumeric():
+                index = -int(index[1:])
         if isinstance(index, int):
             if index == -1:
                 return np.asarray(csv.iloc[:, index])
