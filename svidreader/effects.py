@@ -137,7 +137,7 @@ def read_numbers(filename):
     with open(filename, 'r') as f:
         return np.asarray([int(x) for x in f],dtype=int)
 
-def read_map(filename, source = 'from', destination='to'):
+def read_map(filename, source = 'from', destination='to', sourceoffset=0, destinationoffset=0):
     res = {}
     import pandas as pd
     csv = pd.read_csv(filename, sep=' ')
@@ -153,7 +153,7 @@ def read_map(filename, source = 'from', destination='to'):
             return np.asarray(csv.iloc[:, index])
         if isinstance(index, str):
             return np.asarray(csv[index])
-    return dict(zip(get_variable(csv, source), get_variable(csv, destination)))
+    return dict(zip(get_variable(csv, source) + sourceoffset, get_variable(csv, destination) + destinationoffset))
 
 
 class TimeToFrame(VideoSupplier):
@@ -163,7 +163,7 @@ class TimeToFrame(VideoSupplier):
 
 
 class PermutateFrames(VideoSupplier):
-    def __init__(self, reader, permutation=None, mapping=None, source='from', destination='to'):
+    def __init__(self, reader, permutation=None, mapping=None, source='from', destination='to', sourceoffset=0, destinationoffset=0):
         if isinstance(permutation, str):
             permutation = read_numbers(permutation)
         if isinstance(mapping, str):
