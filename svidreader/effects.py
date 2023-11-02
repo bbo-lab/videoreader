@@ -145,7 +145,7 @@ def read_map(filename, source = 'from', destination='to'):
         if isinstance(index, str):
             if index.isnumeric():
                 index = int(index)
-            if len(index) != 0 and index[0] == '-' and index[1:].isnumeric():
+            elif len(index) != 0 and index[0] == '-' and index[1:].isnumeric():
                 index = -int(index[1:])
         if isinstance(index, int):
             if index == -1:
