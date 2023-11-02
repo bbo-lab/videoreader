@@ -149,8 +149,8 @@ def read_map(filename, source = 'from', destination='to'):
                 index = -int(index[1:])
         if isinstance(index, int):
             if index == -1:
-                return np.asarray(csv.iloc[:, index])
-            return np.arange(csv.shape[0])
+                return np.arange(csv.shape[0])
+            return np.asarray(csv.iloc[:, index])
         if isinstance(index, str):
             return np.asarray(csv[index])
     return dict(zip(get_variable(csv, source), get_variable(csv, destination)))
