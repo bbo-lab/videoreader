@@ -238,7 +238,7 @@ def create_filtergraph_from_string(inputs, pipeline, gui_callback=None, options=
                 last = MatplotlibViewer(curinputs[0], backend=effect_options.get('backend','matplotlib'), gui_callback=gui_callback)
             elif effectname == "dump":
                 assert len(curinputs) == 1
-                last = DumpToFile(reader=curinputs[0], outputfile=effect_options['output'], makedir='mkdir' in effect_options)
+                last = DumpToFile(reader=curinputs[0], outputfile=effect_options['output'], makedir='mkdir' in effect_options, comment=effect_options.get('comment',None))
             elif effectname == "arange":
                 last = Arange(inputs=curinputs, ncols=int(effect_options.get('ncols','-1')))
             elif effectname == "scale":
