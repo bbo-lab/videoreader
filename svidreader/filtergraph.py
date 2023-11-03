@@ -138,8 +138,8 @@ def create_filtergraph_from_string(inputs, pipeline, gui_callback=None, options=
                 curinputs.append(filtergraph[line[1:br_close]])
                 line = line[br_close + 1:len(line)]
             noinput = len(curinputs) == 0
-            if noinput:
-                curinputs.extend(inputs)
+            if noinput and last is not None:
+                curinputs.append(last)
             curoutputs = []
             while True:
                 line = line.strip()

@@ -172,7 +172,7 @@ class PermutateFrames(VideoSupplier):
             permutation = read_map(mapping, source, destination)
         self.permutation = permutation
         self.invalid = np.zeros_like(reader.read(index=0))
-        for frame in np.sort(self.permutation.keys()):
+        for frame in sorted(self.permutation.keys()):
             if self.permutation[frame] >= len(reader):
                 break
             n_frames = frame + 1
