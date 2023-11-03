@@ -4,7 +4,7 @@ import threading
 import numpy as np
 
 class MatplotlibViewer(VideoSupplier):
-    def __init__(self, reader, cmap=None, backend="matplotlib", gui_callback = None):
+    def __init__(self, reader, cmap=None, backend="qt", gui_callback = None):
         super().__init__(n_frames=reader.n_frames, inputs=(reader,))
         self.backend = backend
         self.exit_event = None
@@ -25,7 +25,7 @@ class MatplotlibViewer(VideoSupplier):
             self.ax_textbox = plt.axes([0.5, 0.0, 0.1, 0.05])
 
             self.button_previous_frame =  Button(ax=self.ax_button_previous_frame, label="<", color='pink', hovercolor='tomato')
-            self.slider_frame = Slider(ax=self.ax_slider_frame,label='',valmin=0,valmax=reader.n_frames,valinit=0)
+            self.slider_frame = Slider(ax=self.ax_slider_frame,label='',valmin=0,valmax=reader.n_frames - 1,valinit=0)
             self.button_next_frame =  Button(ax=self.ax_button_next_frame, label=">", color='pink', hovercolor='tomato')
             self.textbox_frame = TextBox(ax=self.ax_textbox, label='', initial='0')
 
@@ -51,7 +51,7 @@ class MatplotlibViewer(VideoSupplier):
                     self.slider_frame.setValue(self.frame)
                 if source != self.textbox_frame:
                     self.textbox_frame.setText(str(self.slider_frame.value()))
-                self.img.setImage(np.swapaxes(img, 0, 1))
+                self.img.setImage(np.swapaxes(img, 0, 1),autoLevels=False)
                 self.updating = False
 
             self.redraw = redraw
@@ -85,7 +85,7 @@ class MatplotlibViewer(VideoSupplier):
                 globalLayout.addWidget(self.graphWidget)
 
                 self.updating = True
-                self.img = pg.ImageItem(np.swapaxes(self.read(0), 0, 1))
+                self.img = pg.ImageItem(np.swapaxes(self.read(0), 0, 1), autoLevels=False)
                 self.updating = False
                 self.graphWidget.addItem(self.img)
 
