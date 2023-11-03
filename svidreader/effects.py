@@ -3,7 +3,7 @@ import numpy as np
 
 
 class DumpToFile(VideoSupplier):
-    def __init__(self, reader, outputfile, makedir = False):
+    def __init__(self, reader, outputfile, makedir = False, comment=None):
         import imageio
         super().__init__(n_frames= reader.n_frames, inputs=(reader,))
         self.outputfile = outputfile
@@ -17,6 +17,8 @@ class DumpToFile(VideoSupplier):
             self.type = "csv"
             self.mapkeys = None
             self.output = open(outputfile, 'w')
+            if comment is not None:
+                self.output.write(comment + '\n')
 
     def close(self):
         super().close()
@@ -170,7 +172,11 @@ class PermutateFrames(VideoSupplier):
             permutation = read_map(mapping, source, destination)
         self.permutation = permutation
         self.invalid = np.zeros_like(reader.read(index=0))
-        super().__init__(n_frames=len(permutation), inputs=(reader,))
+        for frame in np.sort(self.permutation.keys()):
+            if self.permutation[frame] >= len(reader):
+                break
+            n_frames = frame + 1
+        super().__init__(n_frames=n_frames, inputs=(reader,))
 
     def read(self, index):
         if index in self.permutation:
