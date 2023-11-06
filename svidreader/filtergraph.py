@@ -176,13 +176,13 @@ def create_filtergraph_from_string(inputs, pipeline, gui_callback=None, options=
                 last = get_reader(effect_options['input'], backend=effect_options.get("backend", "iio"), cache=False)
             elif effectname == 'permutate':
                 assert len(curinputs) == 1
-                last = PermutateFrames(reader = curinputs[0],
+                last = PermutateFrames(reader=curinputs[0],
                                        permutation=effect_options.get('input', None),
                                        mapping=effect_options.get('map', None),
                                        source=effect_options.get('source','from'),
                                        destination=effect_options.get('destination','to'),
-                                       sourceoffset=effect_options.get('sourceoffset',0),
-                                       destinationoffset=effect_options.get('destinationoffset',0))
+                                       sourceoffset=int(effect_options.get('sourceoffset', 0)),
+                                       destinationoffset=int(effect_options.get('destinationoffset', 0)))
             elif effectname == "analyze":
                 assert len(curinputs) == 1
                 from svidreader.analyze_image import AnalyzeImage

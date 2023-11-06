@@ -39,6 +39,9 @@ class VideoSupplier:
     def get_meta_data(self):
         return self.inputs[0].get_meta_data()
 
+    def read(self):
+        raise NotImplementedError("This method has to be overriden")
+
     def get_data(self, index):
         return self.read(index)
 
