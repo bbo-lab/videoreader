@@ -27,5 +27,5 @@ setup(
     ],
     packages=['svidreader'],
     include_package_data=True,
-    install_requires=["imageio", "bbo_ccvtools", "av", "numpy", "scipy", "pyyaml", "bbo-calibcamlib"],
+    install_requires=["imageio", "bbo_ccvtools", "av", "numpy", "scipy", "pyyaml", "pandas", "bbo-calibcamlib"],
 )
