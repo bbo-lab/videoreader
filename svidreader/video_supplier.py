@@ -57,8 +57,9 @@ class VideoIterator(VideoSupplier):
         self.frame_idx = 0
 
     def __next__(self):
-        if self.frame_idx + 1 < self.n_frames:
+        if self.frame_idx < self.n_frames:
+            res = self.inputs[0].read(self.frame_idx)
             self.frame_idx += 1
-            return self.inputs[0].read(self.frame_idx)
+            return res
         else:
             raise StopIteration
