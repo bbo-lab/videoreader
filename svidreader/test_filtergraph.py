@@ -5,8 +5,8 @@ from svidreader.video_supplier import VideoSupplier
 
 
 class DummyIndexVideo(VideoSupplier):
-    def __init__(self):
-        super().__init__(10, ())
+    def __init__(self, num_frames=10):
+        super().__init__(num_frames, ())
 
     def read(self, index):
         return np.full(shape=(1, 1, 1), fill_value=index)
@@ -43,17 +43,17 @@ class TestStringMethods(unittest.TestCase):
         print("ran at ", len(reader) / (time.time() - starttime), "fps")
 
     def test_permutation(self):
-        reader = filtergraph.create_filtergraph_from_string([DummyIndexVideo()],
+        reader = filtergraph.create_filtergraph_from_string([DummyIndexVideo(num_frames=10)],
                                                             "[input_0]permutate=map=./test/test_permutation.csv")['out']
         assert reader.n_frames == 8
         assert reader.read(5).flatten()[0] == 4
 
-        reader = filtergraph.create_filtergraph_from_string([DummyIndexVideo()],
+        reader = filtergraph.create_filtergraph_from_string([DummyIndexVideo(num_frames=10)],
                                                             "[input_0]permutate=map=./test/test_permutation.csv:sourceoffset=2")['out']
         assert reader.n_frames == 10
         assert reader.read(4).flatten()[0] == 5
 
-        reader = filtergraph.create_filtergraph_from_string([DummyIndexVideo()],
+        reader = filtergraph.create_filtergraph_from_string([DummyIndexVideo(num_frames=10)],
                                                             "[input_0]permutate=map=./test/test_permutation.csv:sourceoffset=2:destinationoffset=1")['out']
         assert reader.n_frames == 10
         assert reader.read(4).flatten()[0] == 6
