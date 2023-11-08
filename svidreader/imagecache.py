@@ -146,7 +146,7 @@ class ImageCache(VideoSupplier):
                     self.curmemsize -= self.cached[k].memsize()
                     self.framestatus[k] = FrameStatus.NOT_CACHED
                     del self.cached[k]
-                print("cleaned", oldsize - len(self.cached),"of", oldsize, "freed",(oldmemsize - self.curmemsize)//1024//1024,"MB of",oldmemsize//1024//1024,"MB")
+                #print("cleaned", oldsize - len(self.cached),"of", oldsize, "freed",(oldmemsize - self.curmemsize)//1024//1024,"MB of",oldmemsize//1024//1024,"MB")
             except Exception as e:
                 print(e)
 
