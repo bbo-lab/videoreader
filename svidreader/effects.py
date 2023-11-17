@@ -1,20 +1,24 @@
-import hashlib
-import imageio.v3 as iio
 from svidreader.video_supplier import VideoSupplier
-from ccvtools import rawio
 import numpy as np
 
+
 class DumpToFile(VideoSupplier):
-    def __init__(self, reader, outputfile):
+    def __init__(self, reader, outputfile, makedir = False, comment=None):
         import imageio
         super().__init__(n_frames= reader.n_frames, inputs=(reader,))
         self.outputfile = outputfile
+        if makedir:
+            from pathlib import Path
+            Path(outputfile).parent.mkdir(parents=True, exist_ok=True)
         if outputfile.endswith('.mp4'):
             self.type = "movie"
             self.output =  imageio.get_writer(outputfile)
         else:
             self.type = "csv"
+            self.mapkeys = None
             self.output = open(outputfile, 'w')
+            if comment is not None:
+                self.output.write(comment + '\n')
 
     def close(self):
         super().close()
@@ -23,9 +27,13 @@ class DumpToFile(VideoSupplier):
     def read(self, index):
         data = self.inputs[0].read(index=index)
         if self.type == "movie":
-            self.output.append_data(data)
+            if data is not None:
+                self.output.append_data(data)
         elif self.type == "csv":
-            self.output.write(str(index) + ' ' + ' '.join(map(str, data)) + '\n')
+            if self.mapkeys == None and isinstance(data, dict):
+                self.mapkeys = data.keys()
+                self.output.write("index " + ' '.join(self.mapkeys) + '\n')
+            self.output.write(str(index) + ' ' + ' '.join([str(data[k]) for k in self.mapkeys]) + '\n')
         return data
 
 class Arange(VideoSupplier):
@@ -50,27 +58,71 @@ class Arange(VideoSupplier):
         return res
 
 class Crop(VideoSupplier):
-    def __init__(self, reader, width=-1, height=-1):
+    def __init__(self, reader, x = 0, y = 0, width=-1, height=-1):
         super().__init__(n_frames=reader.n_frames, inputs=(reader,))
+        self.x = x
+        self.y = y
         self.width = width
         self.height = height
 
     def read(self, index):
         img = self.inputs[0].read(index=index)
-        return img[0:self.height, 0:self.width]
+        res = img[self.x : self.x + self.height, self.y : self.y + self.width]
+        return res
 
-class AnalyzeContrast(VideoSupplier):
-    def __init__(self, reader):
+
+class Math(VideoSupplier):
+    def __init__(self, reader, expression):
+        super().__init__(n_frames=reader[0].n_frames, inputs=reader)
+        print('expression',expression)
+        self.exp = compile(expression, '<string>', 'exec')
+
+    def read(self, index):
+        args = {'i' + str(i) : self.inputs[i].read(index = index) for i in range(len(self.inputs))}
+        args['np'] = np
+        ldict = {}
+        exec(self.exp, args, ldict)
+        return ldict['out']
+
+
+
+
+class MaxIndex(VideoSupplier):
+    def __init__(self, reader, count, radius):
         super().__init__(n_frames=reader.n_frames, inputs=(reader,))
+        self.count = int(count)
+        self.radius = int(radius)
+
+    def read(self, index):
+        import cv2
+        img = self.inputs[0].read(index=index)
+        img = np.array(img,copy=True)
+        i = 0
+        res = {}
+        while True:
+            maxpix = np.argmax(img)
+            maxpix = np.unravel_index(maxpix, img.shape[0:2])
+            res['x'+str(i)] = maxpix[0]
+            res['y'+str(i)] = maxpix[1]
+            res['c'+str(i)] = img[maxpix[0],maxpix[1]]
+            i = i + 1
+            if i > self.count:
+                break
+            cv2.circle(img, (maxpix[1],maxpix[0]), self.radius, 0, -1)
+        return res
+
+
+class Plot(VideoSupplier):
+    def __init__(self, reader):
+        super().__init__(n_frames=reader.n_frames, input=(reader,))
 
     def read(self, index):
         img = self.inputs[0].read(index=index)
-        gy, gx = np.gradient(img, axis=(0, 1))
-        np.square(gx, out=gx)
-        np.square(gy, out=gy)
-        gx += gy
-        np.sqrt(gx, out=gx)
-        return np.average(gx)
+        data = self.inputs[1].read(index=index)
+        img = np.copy(img)
+        cv2.circle(img, (data['x'], data['y']), 2, (255, 0, 0), data['c'])
+        return img
+
 
 class Scale(VideoSupplier):
     def __init__(self, reader, scale):
@@ -87,22 +139,50 @@ def read_numbers(filename):
     with open(filename, 'r') as f:
         return np.asarray([int(x) for x in f],dtype=int)
 
+def read_map(filename, source = 'from', destination='to', sourceoffset=0, destinationoffset=0):
+    res = {}
+    import pandas as pd
+    csv = pd.read_csv(filename, sep=' ')
+    def get_variable(csv, index):
+        if isinstance(index, str):
+            if index.isnumeric():
+                index = int(index)
+            elif len(index) != 0 and index[0] == '-' and index[1:].isnumeric():
+                index = -int(index[1:])
+        if isinstance(index, int):
+            if index == -1:
+                return np.arange(csv.shape[0])
+            return np.asarray(csv.iloc[:, index])
+        if isinstance(index, str):
+            return np.asarray(csv[index])
+    return dict(zip(get_variable(csv, source) + sourceoffset, get_variable(csv, destination) + destinationoffset))
+
 
 class TimeToFrame(VideoSupplier):
     def __init__(self, reader, timingfile):
-        import pandas
+        import pandas as pd
         timings = pd.read_csv(timingfile)
 
 
 class PermutateFrames(VideoSupplier):
-    def __init__(self, reader, permutation):
+    def __init__(self, reader, permutation=None, mapping=None, source='from', destination='to', sourceoffset=0, destinationoffset=0):
         if isinstance(permutation, str):
             permutation = read_numbers(permutation)
-        super().__init__(n_frames=len(permutation), inputs=(reader,))
+        if isinstance(mapping, str):
+            permutation = read_map(mapping, source, destination, sourceoffset, destinationoffset)
+        self.permutation = permutation
+        self.invalid = np.zeros_like(reader.read(index=0))
+        for frame in sorted(self.permutation.keys()):
+            if self.permutation[frame] >= len(reader):
+                break
+            n_frames = frame + 1
+        super().__init__(n_frames=n_frames, inputs=(reader,))
 
     def read(self, index):
-        img = self.inputs[0].read(index=permutation[index])
-        return img
+        if index in self.permutation:
+            return self.inputs[0].read(index=self.permutation[index])
+        else:
+            return self.invalid
 
 class BgrToGray(VideoSupplier):
     def __init__(self, reader):
@@ -112,6 +192,26 @@ class BgrToGray(VideoSupplier):
         img = self.inputs[0].read(index=index // 3)
         return img[:,:,[index % 3]]
 
+
+class ChangeFramerate(VideoSupplier):
+    def __init__(self, reader, factor = 1):
+        super().__init__(n_frames=int(np.round(reader.n_frames / factor)), inputs=(reader,))
+        self.factor = factor
+
+    def read(self, index):
+        return self.inputs[0].read(int(np.round(index * self.factor)))
+
+
+class ConstFrame(VideoSupplier):
+    def __init__(self, reader, frame):
+        super().__init__(n_frames=reader.n_frames * 3, inputs=(reader,))
+        self.frame = frame
+        self.img = None
+
+    def read(self, index):
+        if self.img is None:
+            self.img = self.inputs[0].read(self.frame)
+        return self.img
 
 class FrameDifference(VideoSupplier):
     def __init__(self, reader):

@@ -17,9 +17,10 @@ jobs:
       - name: Install Videoreader
         run: |
           pip install .
+          pip install decord
           pip install imageio[pyav]
       - name: Test with pytest
         run: |
           pip install pytest
           pip install pytest-cov
-          pytest
+          pytest -s
