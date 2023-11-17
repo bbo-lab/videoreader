@@ -23,31 +23,31 @@ class MajorityVote(VideoSupplier):
             return xp.exp(-xp.sum(xp.square(diff), axis=2))
         return gauss
 
-    def read(self, index):
+    def read(self, index, force_type=np):
         begin = max(0, index - self.window)
         end = min(index + self.window, self.n_frames)
         for i in range(begin, end):
             if i not in self.stack:
-                self.stack[i] = xp.asarray(self.inputs[0].read(index = i))
+                self.stack[i] = self.inputs[0].read(index = i, force_type=xp)
         shape = self.stack[begin].shape[0:2]
         cache_next = {}
         for i in range(begin, end):
-            sum = xp.zeros(shape=shape, dtype=xp.float32)
             curimage = self.stack[i].astype(xp.float32)
-            if i in self.cache :
+            if i in self.cache:
                 ca  = self.cache[i]
-                xp.copyto(sum, ca[2])
+                sum = xp.array(ca[2], dtype=xp.float32, copy=True)
                 does_include = np.arange(ca[0], ca[1])
                 should_include = np.arange(begin, end)
                 for j in np.setdiff1d(should_include, does_include):
                     if j not in self.stack:
-                        self.stack[j] = xp.asarray(self.inputs[0].read(index=j))
+                        self.stack[j] = self.inputs[0].read(index=j, force_type=xp)
                     sum += self.gauss(curimage, self.stack[j])
                 for j in np.setdiff1d(does_include, should_include):
                     if j not in self.stack:
-                        self.stack[j] = xp.asarray(self.inputs[0].read(index=j))
+                        self.stack[j] = self.inputs[0].read(index=j, force_type=xp)
                     sum -= self.gauss(curimage, self.stack[j])
             else:
+                sum = xp.zeros(shape=shape, dtype=xp.float32)
                 for j in range(begin, end):
                     sum += self.gauss(curimage, self.stack[j])
             cache_next[i] = (begin, end, sum)
@@ -65,4 +65,4 @@ class MajorityVote(VideoSupplier):
             if k < begin or k > end:
                 del self.stack[k]
         self.cache = cache_next
-        return xp.asnumpy(result)
+        return VideoSupplier.convert(result, force_type)

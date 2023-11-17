@@ -1,4 +1,5 @@
 from svidreader.video_supplier import VideoSupplier
+import svidreader.dummy_array_module as dp
 import numpy as np
 
 
@@ -64,27 +65,40 @@ class Crop(VideoSupplier):
         self.y = y
         self.width = width
         self.height = height
+        self.last = (np.nan,None)
 
-    def read(self, index):
-        img = self.inputs[0].read(index=index)
+    def read(self, index, force_type=np):
+        last = self.last
+        if self.last[0] == index:
+            res = VideoSupplier.convert(last[1], force_type)
+        img = self.inputs[0].read(index=index, force_type=force_type)
         res = img[self.x : self.x + self.height, self.y : self.y + self.width]
+        self.last = (index, res)
+        if res is None:
+            raise Exception()
         return res
 
 
 class Math(VideoSupplier):
-    def __init__(self, reader, expression):
+    def __init__(self, reader, expression, library='np'):
         super().__init__(n_frames=reader[0].n_frames, inputs=reader)
-        print('expression',expression)
+        if library == 'numpy':
+            self.xp = np
+        elif library == 'cupy':
+            import cupy as cp
+            self.xp = cp
+        elif library == 'jax':
+            import jax
+            self.xp = jax.numpy
         self.exp = compile(expression, '<string>', 'exec')
 
-    def read(self, index):
-        args = {'i' + str(i) : self.inputs[i].read(index = index) for i in range(len(self.inputs))}
+    def read(self, index, force_type=np):
+        args = {'i' + str(i) : self.inputs[i].read(index = index, force_type=self.xp) for i in range(len(self.inputs))}
         args['np'] = np
+        args['xp'] = self.xp
         ldict = {}
         exec(self.exp, args, ldict)
-        return ldict['out']
-
-
+        return VideoSupplier.convert(ldict['out'], force_type)
 
 
 class MaxIndex(VideoSupplier):
@@ -93,22 +107,33 @@ class MaxIndex(VideoSupplier):
         self.count = int(count)
         self.radius = int(radius)
 
-    def read(self, index):
+    @staticmethod
+    def get_maxpixels(img, count, radius):
         import cv2
-        img = self.inputs[0].read(index=index)
-        img = np.array(img,copy=True)
-        i = 0
-        res = {}
-        while True:
+        res = np.zeros(shape=(count, 2),dtype=int)
+        for i in range(count):
             maxpix = np.argmax(img)
             maxpix = np.unravel_index(maxpix, img.shape[0:2])
-            res['x'+str(i)] = maxpix[0]
-            res['y'+str(i)] = maxpix[1]
-            res['c'+str(i)] = img[maxpix[0],maxpix[1]]
-            i = i + 1
-            if i > self.count:
-                break
-            cv2.circle(img, (maxpix[1],maxpix[0]), self.radius, 0, -1)
+            res[i] = maxpix
+            cv2.circle(img, (maxpix[1], maxpix[0]), radius, 0, -1)
+            #maxpix=np.asarray(maxpix)
+            #lhs = np.maximum(maxpix+radius, 0)
+            #rhs = np.minimum(maxpix-radius, img.shape)
+            #img[lhs[0]:rhs[0],lhs[1]:rhs[1]]=0
+        return res
+
+
+    def read(self, index, force_type=None):
+        img = self.inputs[0].read(index=index)
+        img = VideoSupplier.convert(img, np)
+        locations = MaxIndex.get_maxpixels(img, self.count, self.radius)
+        values =  img[(*locations.T,)]
+        res = {}
+        for i in range(self.count):
+            cur = locations[i]
+            res['x' + str(i)] = cur[0]
+            res['y' + str(i)] = cur[1]
+            res['c' + str(i)] = values[i]
         return res
 
 
@@ -178,9 +203,9 @@ class PermutateFrames(VideoSupplier):
             n_frames = frame + 1
         super().__init__(n_frames=n_frames, inputs=(reader,))
 
-    def read(self, index):
+    def read(self, index, force_type=np):
         if index in self.permutation:
-            return self.inputs[0].read(index=self.permutation[index])
+            return self.inputs[0].read(index=self.permutation[index], force_type=force_type)
         else:
             return self.invalid
 

@@ -1,3 +1,7 @@
+import inspect
+import logging
+
+
 class VideoSupplier:
     def __init__(self, n_frames, inputs = ()):
         self.inputs = inputs
@@ -50,6 +54,20 @@ class VideoSupplier:
         for i in self.inputs:
             res = res * 7 + hash(i)
         return res
+
+    @staticmethod
+    def convert(img, module):
+        if module == None:
+            return img
+        t = type(img)
+        if inspect.getmodule(t) == module:
+            return img
+        if logging.DEBUG >= logging.root.level:
+            finfo = inspect.getouterframes( inspect.currentframe() )[1]
+            print(F'convert {t.__module__} to {module.__name__} by {finfo.filename} line {finfo.lineno}')
+        if t.__module__ == 'cupy':
+            return module.array(img.get(), copy=False)
+        return module.array(img,copy=False)
 
 class VideoIterator(VideoSupplier):
     def __init__(self, reader):

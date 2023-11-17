@@ -8,8 +8,7 @@ from enum import IntEnum
 from multiprocessing.pool import ThreadPool
 import numpy as np
 from svidreader.video_supplier import VideoSupplier
-
-
+import logging
 
 #This class acts as a cache-proxy to access a the-imageio-reader.
 #Options are tuned to read compressed videos.
@@ -60,8 +59,7 @@ class PriorityThreadPool(ThreadPool):
     def close(self):
         pass
 
-    def submit(self,task, priority=0):
-        future = Future()
+    def submit(self,task, priority=0, future = Future()):
         self.loadingQueue.put(QueuedLoad(task, priority = priority, future = future))
         self.apply_async(self.worker)
         return future
@@ -101,7 +99,8 @@ class ImageCache(VideoSupplier):
         self.th = None
         self.usage_counter = 0
         self.last_read = 0
-        self.num_preload = preload
+        self.num_preload_fwd = preload
+        self.num_preload_bwd = preload
         self.connect_segments = preload
         self.keyframes = keyframes if keyframes is not None else reader.get_key_indices()
         self.ptp = PriorityThreadPool(processes=processes)
@@ -151,7 +150,7 @@ class ImageCache(VideoSupplier):
                 print(e)
 
 
-    def read_impl(self,index):
+    def read_impl(self,index, force_type=None):
         with self.lock:
              res = self.cached.get(index)
              if res is not None:
@@ -159,10 +158,13 @@ class ImageCache(VideoSupplier):
         #Connect segments to not jump through the video
         if index - self.last_read < self.connect_segments:
             for i in range(self.last_read + 1, index):
-                data = self.inputs[0].read(index=i)
+                data = self.inputs[0].read(index=i, force_type=force_type)
                 with self.lock:
                     self.add_to_cache(i, data, hash(self.inputs[0]) * 7 + index)
-        data = self.inputs[0].read(index=index)
+            self.last_read = index - 1
+        elif self.last_read + 1 != index:
+            logging.debug(f'nonsequential read {self.last_read} to {index}')
+        data = self.inputs[0].read(index=index, force_type=force_type)
         self.last_read = index
         with self.lock:
             res = self.add_to_cache(index, data, hash(self.inputs[0]) * 7 + index)
@@ -170,16 +172,17 @@ class ImageCache(VideoSupplier):
             return res
 
 
-    def load(self, index, lazy = False):
+    def load(self, index, lazy = False, force_type=None):
         if lazy:
             if self.framestatus[index] > FrameStatus.NOT_CACHED:
                 return
             self.framestatus[index] = FrameStatus.LOADING_BG
-            priority = index
+            priority = index + self.num_preload_bwd
         else:
             self.framestatus[index] = FrameStatus.LOADING_FG
-            priority=index - self.num_preload
-        return self.ptp.submit(lambda: self.read_impl(index), priority=priority)
+            priority=index
+        future = Future()
+        return self.ptp.submit(lambda: self.read_impl(index, force_type=force_type), priority=priority, future=future)
 
 
     def get_result_from_future(self, future):
@@ -189,29 +192,31 @@ class ImageCache(VideoSupplier):
         return res.data
 
 
-    def read(self,index=None,blocking=True):
+    def read(self,index=None,blocking=True, force_type=np):
         if index >= self.n_frames:
             raise Exception('Out of bounds, frame ' + str(index) + ' of ' + str(self.n_frames) + 'requested')
         res = None
         with self.lock:
             res = self.cached.get(index)
         if res is None:
-            future = self.load(index, lazy=False)
+            future = self.load(index, lazy=False, force_type=force_type)
         end = index
         if self.n_frames > 0:
-            end = min(index + self.num_preload, self.n_frames - 1)
-        begin = max(index - self.num_preload, 0)
+            end = min(index + self.num_preload_fwd, self.n_frames - 1)
+        begin = max(index - self.num_preload_bwd, 0)
         if self.keyframes is not None:
             right_idx = self.keyframes.searchsorted(index,'right')-1
             begin = 0 if right_idx == 0 else self.keyframes[right_idx]
             begin = max(begin, index - self.maxcount // 2)
         for i in range(begin, end):
-            self.load(index=i, lazy=True)
+            self.load(index=i, lazy=True, force_type=force_type)
         if res is not None:
             res.last_used = self.usage_counter
             self.usage_counter += 1
-            return res.data
+            return VideoSupplier.convert(res.data, force_type)
         if blocking:
-            return self.get_result_from_future(future)
+            res = self.get_result_from_future(future)
+            return VideoSupplier.convert(res, force_type)
         future.add_done_callback(lambda : self.get_result_from_future(future))
+        return future
 

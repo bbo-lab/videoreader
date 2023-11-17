@@ -165,6 +165,11 @@ def create_filtergraph_from_string(inputs, pipeline, gui_callback=None, options=
             if effectname == 'cache':
                 assert len(curinputs) == 1
                 last = ImageCache(curinputs[0], maxcount=effect_options.get('cmax',1000), processes=effect_options.get('num_threads',1), preload=effect_options.get('preload',20))
+            elif effectname == 'minicache':
+                assert len(curinputs) == 1
+                last = ImageCache(curinputs[0], maxcount=effect_options.get('cmax', 5),
+                                  processes=effect_options.get('num_threads', 1),
+                                  preload=effect_options.get('preload', 2))
             elif effectname == 'bgr2gray':
                 assert len(curinputs) == 1
                 last = BgrToGray(curinputs[0])
@@ -174,6 +179,10 @@ def create_filtergraph_from_string(inputs, pipeline, gui_callback=None, options=
             elif effectname == 'reader':
                 assert noinput
                 last = get_reader(effect_options['input'], backend=effect_options.get("backend", "iio"), cache=False)
+            elif effectname == 'flow':
+                assert len(curinputs) == 1
+                import svidreader.flow as flow
+                last = flow.OpticFlow(curinputs[0])
             elif effectname == 'permutate':
                 assert len(curinputs) == 1
                 last = PermutateFrames(reader=curinputs[0],
@@ -202,7 +211,7 @@ def create_filtergraph_from_string(inputs, pipeline, gui_callback=None, options=
                 assert len(curinputs) == 1
                 last = ConstFrame(curinputs[0], frame=int(effect_options.get('frame')))
             elif effectname == "math":
-                last = Math(curinputs, expression=effect_options.get('exp'))
+                last = Math(curinputs, expression=effect_options.get('exp'), library=effect_options.get('library','np'))
             elif effectname == "crop":
                 assert len(curinputs) == 1
                 w = -1
