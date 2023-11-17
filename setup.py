@@ -9,7 +9,7 @@ README = (HERE / "README.md").read_text()
 # This call to setup() does all the work
 setup(
     name="bbo-svidreader",
-    version="0.4.1",
+    version="0.5.0",
     description="Video reader on top of imageio that compares returned frames to a list of hashes",
     long_description=README,
     long_description_content_type="text/markdown",
