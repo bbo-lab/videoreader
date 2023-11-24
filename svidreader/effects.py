@@ -196,14 +196,15 @@ class PermutateFrames(VideoSupplier):
             permutation = read_map(mapping, source, destination, sourceoffset, destinationoffset)
         else:
             permutation = np.arange(0, len(reader)) - sourceoffset + destinationoffset
-        n_frames = len(permutation)
         self.permutation = permutation
         self.invalid = np.zeros_like(reader.read(index=0))
-        if self.permutation is dict:
+        if isinstance(self.permutation, dict):
             for frame in sorted(self.permutation.keys()):
                 if self.permutation[frame] >= len(reader):
                     break
                 n_frames = frame + 1
+        else:
+            n_frames = len(self.permutation)
         super().__init__(n_frames=n_frames, inputs=(reader,))
 
     def read(self, index, force_type=np):
