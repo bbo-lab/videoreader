@@ -192,15 +192,19 @@ class TimeToFrame(VideoSupplier):
 class PermutateFrames(VideoSupplier):
     def __init__(self, reader, permutation=None, mapping=None, source='from', destination='to', sourceoffset=0, destinationoffset=0):
         if isinstance(permutation, str):
-            permutation = read_numbers(permutation)
-        if isinstance(mapping, str):
+            permutation = read_numbers(permutation) + destinationoffset
+        elif isinstance(mapping, str):
             permutation = read_map(mapping, source, destination, sourceoffset, destinationoffset)
+        else:
+            permutation = np.arange(0, len(reader)) - sourceoffset + destinationoffset
+        n_frames = len(permutation)
         self.permutation = permutation
         self.invalid = np.zeros_like(reader.read(index=0))
-        for frame in sorted(self.permutation.keys()):
-            if self.permutation[frame] >= len(reader):
-                break
-            n_frames = frame + 1
+        if self.permutation is dict:
+            for frame in sorted(self.permutation.keys()):
+                if self.permutation[frame] >= len(reader):
+                    break
+                n_frames = frame + 1
         super().__init__(n_frames=n_frames, inputs=(reader,))
 
     def read(self, index, force_type=np):

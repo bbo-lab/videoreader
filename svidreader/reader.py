@@ -120,11 +120,11 @@ class SVidReader(VideoSupplier):
                 self.hash = int(hash_fun.hexdigest(), 16)
             return self.hash
 
-    def read(self, index):
+    def read(self, index, force_type=np):
         tmp = self.get_data(fr_idx = index)
         if len(tmp.shape) == 2:
             tmp = tmp[:,:,np.newaxis]
-        return tmp
+        return VideoSupplier.convert(tmp, force_type)
 
     def improps(self):
         return self.vprops
