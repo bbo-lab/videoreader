@@ -1,5 +1,4 @@
 from svidreader.video_supplier import VideoSupplier
-import svidreader.dummy_array_module as dp
 import numpy as np
 
 
