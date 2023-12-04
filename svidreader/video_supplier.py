@@ -41,6 +41,8 @@ class VideoSupplier:
         return self.inputs[0].get_offset()
 
     def get_meta_data(self):
+        if len(self.inputs) == 0:
+            return {}
         return self.inputs[0].get_meta_data()
 
     def read(self):
