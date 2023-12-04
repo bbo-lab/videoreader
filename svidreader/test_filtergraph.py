@@ -43,7 +43,6 @@ class TestFilterFunctions(unittest.TestCase):
         print("ran at ", len(reader) / (time.time() - starttime), "fps")
 
     def test_iterator(self):
-        print('hi')
         reader = DummyIndexVideo(num_frames=10)
         import itertools
         for (i_frame, frame) in enumerate(itertools.islice(reader, 2, 5)):

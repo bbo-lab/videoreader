@@ -25,7 +25,7 @@ class DumpToFile(VideoSupplier):
         self.output.close()
 
     def read(self, index):
-        data = self.inputs[0].read(index=index)
+            data = self.inputs[0].read(index=index)
         if self.type == "movie":
             if data is not None:
                 self.output.append_data(data)
@@ -41,13 +41,13 @@ class Arange(VideoSupplier):
         super().__init__(n_frames=inputs[0].n_frames, inputs=inputs)
         self.ncols = ncols
 
-    def read(self, index):
+    def read(self, index, force_type=np):
         grid = [[]]
         maxdim = np.zeros(shape=(3,), dtype=int)
         for r in self.inputs:
             if len(grid[-1]) == self.ncols:
                 grid.append([])
-            img = r.read(index=index)
+            img = r.read(index=index, force_type=force_type)
             grid[-1].append(img)
             maxdim = np.maximum(maxdim, img.shape)
         res = np.zeros(shape=(maxdim[0] * len(grid), maxdim[1] * len(grid[0]), maxdim[2]),dtype=grid[0][0].dtype)
@@ -68,18 +68,16 @@ class Crop(VideoSupplier):
 
     def read(self, index, force_type=np):
         last = self.last
-        if self.last[0] == index:
-            res = VideoSupplier.convert(last[1], force_type)
+        if last[0] == index:
+            return VideoSupplier.convert(last[1], force_type)
         img = self.inputs[0].read(index=index, force_type=force_type)
         res = img[self.x : self.x + self.height, self.y : self.y + self.width]
         self.last = (index, res)
-        if res is None:
-            raise Exception()
         return res
 
 
 class Math(VideoSupplier):
-    def __init__(self, reader, expression, library='np'):
+    def __init__(self, reader, expression, library='numpy'):
         super().__init__(n_frames=reader[0].n_frames, inputs=reader)
         if library == 'numpy':
             self.xp = np
@@ -89,7 +87,13 @@ class Math(VideoSupplier):
         elif library == 'jax':
             import jax
             self.xp = jax.numpy
+        else:
+            raise Exception('Library ' + library + ' not known')
         self.exp = compile(expression, '<string>', 'exec')
+
+    @staticmethod
+    def name():
+        return "math"
 
     def read(self, index, force_type=np):
         args = {'i' + str(i) : self.inputs[i].read(index = index, force_type=self.xp) for i in range(len(self.inputs))}
@@ -121,6 +125,9 @@ class MaxIndex(VideoSupplier):
             #img[lhs[0]:rhs[0],lhs[1]:rhs[1]]=0
         return res
 
+    @staticmethod
+    def name():
+        return "max"
 
     def read(self, index, force_type=None):
         img = self.inputs[0].read(index=index)
@@ -217,8 +224,8 @@ class BgrToGray(VideoSupplier):
     def __init__(self, reader):
         super().__init__(n_frames=reader.n_frames * 3, inputs=(reader,))
 
-    def read(self, index):
-        img = self.inputs[0].read(index=index // 3)
+    def read(self, index, force_type=np):
+        img = self.inputs[0].read(index=index // 3, force_type=force_type)
         return img[:,:,[index % 3]]
 
 
@@ -227,8 +234,8 @@ class ChangeFramerate(VideoSupplier):
         super().__init__(n_frames=int(np.round(reader.n_frames / factor)), inputs=(reader,))
         self.factor = factor
 
-    def read(self, index):
-        return self.inputs[0].read(int(np.round(index * self.factor)))
+    def read(self, index, force_type=np):
+        return self.inputs[0].read(int(np.round(index * self.factor)), force_type=force_type)
 
 
 class ConstFrame(VideoSupplier):
@@ -237,14 +244,15 @@ class ConstFrame(VideoSupplier):
         self.frame = frame
         self.img = None
 
-    def read(self, index):
+    def read(self, index, force_type=np):
         if self.img is None:
-            self.img = self.inputs[0].read(self.frame)
-        return self.img
+            self.img = self.inputs[0].read(self.frame, force_type=force_type)
+        return VideoSupplier.convert(self.img, force_type)
+
 
 class FrameDifference(VideoSupplier):
     def __init__(self, reader):
         super().__init__(n_frames=reader.n_frames - 1, inputs = (reader,))
 
-    def read(self, index):
-        return 128 + self.inputs[0].read(index=index + 1) - self.inputs[0].read(index=index)
+    def read(self, index, force_type=np):
+        return 128 + self.inputs[0].read(index=index + 1, force_type=force_type) - self.inputs[0].read(index=index, force_type=force_type)

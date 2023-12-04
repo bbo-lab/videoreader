@@ -1,4 +1,5 @@
 import hashlib
+import os
 from svidreader.imagecache import ImageCache
 from svidreader.effects import BgrToGray
 from svidreader.effects import FrameDifference
@@ -101,14 +102,13 @@ def get_reader(filename, backend="decord", cache=False, options={}):
     if pipe >= 0:
         pipeline = filename[pipe + 1:]
         filename = filename[0:pipe]
-    if backend == 'iio':
-        if filename.endswith("/"):
-            from svidreader import ImageReader
-            res = ImageReader.ImageRange(filename)
-            processes = 10
-        else:
-            from svidreader import SVidReader
-            res = SVidReader(filename, cache=False)
+    if os.path.isdir(filename):
+        from svidreader import ImageReader
+        res = ImageReader.ImageRange(filename)
+        processes = 10
+    elif backend == 'iio':
+        from svidreader import SVidReader
+        res = SVidReader(filename, cache=False)
     elif backend == 'decord':
         from svidreader import decord_video_wrapper
         res = decord_video_wrapper.DecordVideoReader(filename)
