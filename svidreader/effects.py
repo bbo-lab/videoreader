@@ -25,7 +25,7 @@ class DumpToFile(VideoSupplier):
         self.output.close()
 
     def read(self, index):
-            data = self.inputs[0].read(index=index)
+        data = self.inputs[0].read(index=index)
         if self.type == "movie":
             if data is not None:
                 self.output.append_data(data)

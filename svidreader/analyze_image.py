@@ -58,7 +58,7 @@ class AnalyzeImage(VideoSupplier):
             import numba as nb
             contrast, brightness = analyze(img.astype(self.xp.float32))
         else:
-            img = self.xp.asarray(img, dtype=self.xp.float32, copy=False)
+            img = self.xp.asarray(img, dtype=self.xp.float32)
             gy, gx = self.xp.gradient(img, axis=(0, 1))
             contrast = self.xp.average(self.sqnorm(gx, gy))
             brightness = self.xp.average(img)
