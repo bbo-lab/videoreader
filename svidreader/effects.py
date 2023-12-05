@@ -202,7 +202,7 @@ class PermutateFrames(VideoSupplier):
         elif isinstance(mapping, str):
             permutation = read_map(mapping, source, destination, sourceoffset, destinationoffset)
         else:
-            permutation = np.arange(0, len(reader)) - sourceoffset + destinationoffset
+            permutation = np.arange(0, len(reader) - destinationoffset) - sourceoffset + destinationoffset
         self.permutation = permutation
         self.invalid = np.zeros_like(reader.read(index=0))
         if isinstance(self.permutation, dict):
