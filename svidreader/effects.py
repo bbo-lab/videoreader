@@ -215,7 +215,7 @@ class PermutateFrames(VideoSupplier):
         super().__init__(n_frames=n_frames, inputs=(reader,))
 
     def read(self, index, force_type=np):
-        if index in self.permutation:
+        if (isinstance(self.permutation, dict) and index in self.permutation) or (index >= 0 and index < len(self.permutation)):
             return self.inputs[0].read(index=self.permutation[index], force_type=force_type)
         else:
             return self.invalid
