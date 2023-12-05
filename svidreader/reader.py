@@ -25,7 +25,7 @@ class SVidReader(VideoSupplier):
         if pipe >= 0:
             self.video = self.video[0:pipe]
         self.vprops = iio.improps(self.video, plugin=self.plugin)
-        self.mdata = iio.immeta(self.video, plugin=self.plugin)
+        self.mdata = iio.immeta(self.video, plugin=self.plugin, exclude_applied=False)
         self.reader = iio.imopen(self.video, "r", plugin=self.plugin)
         self.reader.n_frames = self.vprops.shape[0]
         if cache is None:
