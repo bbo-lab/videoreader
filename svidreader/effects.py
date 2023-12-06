@@ -3,16 +3,16 @@ import numpy as np
 
 
 class DumpToFile(VideoSupplier):
-    def __init__(self, reader, outputfile, makedir = False, comment=None):
+    def __init__(self, reader, outputfile, makedir=False, comment=None):
         import imageio
-        super().__init__(n_frames= reader.n_frames, inputs=(reader,))
+        super().__init__(n_frames=reader.n_frames, inputs=(reader,))
         self.outputfile = outputfile
         if makedir:
             from pathlib import Path
             Path(outputfile).parent.mkdir(parents=True, exist_ok=True)
         if outputfile.endswith('.mp4'):
             self.type = "movie"
-            self.output =  imageio.get_writer(outputfile)
+            self.output = imageio.get_writer(outputfile)
         else:
             self.type = "csv"
             self.mapkeys = None
@@ -32,9 +32,10 @@ class DumpToFile(VideoSupplier):
         elif self.type == "csv":
             if self.mapkeys == None and isinstance(data, dict):
                 self.mapkeys = data.keys()
-                self.output.write("index " + ' '.join(self.mapkeys) + '\n')
-            self.output.write(str(index) + ' ' + ' '.join([str(data[k]) for k in self.mapkeys]) + '\n')
+                self.output.write(f"index {' '.join(self.mapkeys)} \n")
+            self.output.write(f"{index} {' '.join([str(data[k]) for k in self.mapkeys])} \n")
         return data
+
 
 class Arange(VideoSupplier):
     def __init__(self, inputs, ncols=-1):
@@ -50,28 +51,30 @@ class Arange(VideoSupplier):
             img = r.read(index=index, force_type=force_type)
             grid[-1].append(img)
             maxdim = np.maximum(maxdim, img.shape)
-        res = np.zeros(shape=(maxdim[0] * len(grid), maxdim[1] * len(grid[0]), maxdim[2]),dtype=grid[0][0].dtype)
+        res = np.zeros(shape=(maxdim[0] * len(grid), maxdim[1] * len(grid[0]), maxdim[2]), dtype=grid[0][0].dtype)
         for col in range(len(grid)):
             for row in range(len(grid[col])):
                 img = grid[col][row]
-                res[col * maxdim[0]: col * maxdim[0] + img.shape[0], row * maxdim[1]: row * maxdim[1] + img.shape[1]] = img
+                res[col * maxdim[0]: col * maxdim[0] + img.shape[0],
+                row * maxdim[1]: row * maxdim[1] + img.shape[1]] = img
         return res
 
+
 class Crop(VideoSupplier):
-    def __init__(self, reader, x = 0, y = 0, width=-1, height=-1):
+    def __init__(self, reader, x=0, y=0, width=-1, height=-1):
         super().__init__(n_frames=reader.n_frames, inputs=(reader,))
         self.x = x
         self.y = y
         self.width = width
         self.height = height
-        self.last = (np.nan,None)
+        self.last = (np.nan, None)
 
     def read(self, index, force_type=np):
         last = self.last
         if last[0] == index:
             return VideoSupplier.convert(last[1], force_type)
         img = self.inputs[0].read(index=index, force_type=force_type)
-        res = img[self.x : self.x + self.height, self.y : self.y + self.width]
+        res = img[self.x: self.x + self.height, self.y: self.y + self.width]
         self.last = (index, res)
         return res
 
@@ -96,7 +99,7 @@ class Math(VideoSupplier):
         return "math"
 
     def read(self, index, force_type=np):
-        args = {'i' + str(i) : self.inputs[i].read(index = index, force_type=self.xp) for i in range(len(self.inputs))}
+        args = {'i' + str(i): self.inputs[i].read(index=index, force_type=self.xp) for i in range(len(self.inputs))}
         args['np'] = np
         args['xp'] = self.xp
         ldict = {}
@@ -113,16 +116,16 @@ class MaxIndex(VideoSupplier):
     @staticmethod
     def get_maxpixels(img, count, radius):
         import cv2
-        res = np.zeros(shape=(count, 2),dtype=int)
+        res = np.zeros(shape=(count, 2), dtype=int)
         for i in range(count):
             maxpix = np.argmax(img)
             maxpix = np.unravel_index(maxpix, img.shape[0:2])
             res[i] = maxpix
             cv2.circle(img, (maxpix[1], maxpix[0]), radius, 0, -1)
-            #maxpix=np.asarray(maxpix)
-            #lhs = np.maximum(maxpix+radius, 0)
-            #rhs = np.minimum(maxpix-radius, img.shape)
-            #img[lhs[0]:rhs[0],lhs[1]:rhs[1]]=0
+            # maxpix=np.asarray(maxpix)
+            # lhs = np.maximum(maxpix+radius, 0)
+            # rhs = np.minimum(maxpix-radius, img.shape)
+            # img[lhs[0]:rhs[0],lhs[1]:rhs[1]]=0
         return res
 
     @staticmethod
@@ -133,7 +136,7 @@ class MaxIndex(VideoSupplier):
         img = self.inputs[0].read(index=index)
         img = VideoSupplier.convert(img, np)
         locations = MaxIndex.get_maxpixels(img, self.count, self.radius)
-        values =  img[(*locations.T,)]
+        values = img[(*locations.T,)]
         res = {}
         for i in range(self.count):
             cur = locations[i]
@@ -166,14 +169,17 @@ class Scale(VideoSupplier):
         resized = cv2.resize(img, (int(img.shape[1] * self.scale), int(img.shape[0] * self.scale)))
         return resized
 
+
 def read_numbers(filename):
     with open(filename, 'r') as f:
-        return np.asarray([int(x) for x in f],dtype=int)
+        return np.asarray([int(x) for x in f], dtype=int)
 
-def read_map(filename, source = 'from', destination='to', sourceoffset=0, destinationoffset=0):
+
+def read_map(filename, source='from', destination='to', sourceoffset=0, destinationoffset=0):
     res = {}
     import pandas as pd
     csv = pd.read_csv(filename, sep=' ')
+
     def get_variable(csv, index):
         if isinstance(index, str):
             if index.isnumeric():
@@ -186,6 +192,7 @@ def read_map(filename, source = 'from', destination='to', sourceoffset=0, destin
             return np.asarray(csv.iloc[:, index])
         if isinstance(index, str):
             return np.asarray(csv[index])
+
     return dict(zip(get_variable(csv, source) + sourceoffset, get_variable(csv, destination) + destinationoffset))
 
 
@@ -196,14 +203,28 @@ class TimeToFrame(VideoSupplier):
 
 
 class PermutateFrames(VideoSupplier):
-    def __init__(self, reader, permutation=None, mapping=None, source='from', destination='to', sourceoffset=0, destinationoffset=0):
+    def __init__(self, reader, permutation=None, mapping=None, source='from', destination='to', sourceoffset=0,
+                 destinationoffset=0, invalid_action="black"):
         if isinstance(permutation, str):
             permutation = read_numbers(permutation) + destinationoffset
         elif isinstance(mapping, str):
             permutation = read_map(mapping, source, destination, sourceoffset, destinationoffset)
         else:
-            permutation = np.arange(0, len(reader) - destinationoffset) - sourceoffset + destinationoffset
+            permutation = np.arange(destinationoffset, len(reader)) - sourceoffset
         self.permutation = permutation
+
+        match (invalid_action):
+            case "black":
+                def invalid_black(index):
+                    return self.invalid
+                self.invalid_action = invalid_black
+            case "exception":
+                def invalid_exception(index):
+                    return Exception(f"{index} not in range")
+                self.invalid_action = invalid_exception
+            case _:
+                raise Exception(f"Action {invalid_action} not known")
+
         self.invalid = np.zeros_like(reader.read(index=0))
         if isinstance(self.permutation, dict):
             for frame in sorted(self.permutation.keys()):
@@ -215,17 +236,10 @@ class PermutateFrames(VideoSupplier):
         super().__init__(n_frames=n_frames, inputs=(reader,))
 
     def read(self, index, force_type=np):
-        def valid_output(): return self.inputs[0].read(index=self.permutation[index], force_type=force_type)
+        if index in self.permutation if isinstance(self.permutation, dict) else 0 <= index < len(self.permutation):
+            return self.inputs[0].read(index=self.permutation[index], force_type=force_type)
+        return self.invalid_action(index)
 
-        if isinstance(self.permutation, dict):
-            if index in self.permutation:
-                return valid_output()
-            else:
-                pass
-        elif 0 <= index < len(self.permutation):
-            return valid_output()
-
-        return self.invalid
 
 class BgrToGray(VideoSupplier):
     def __init__(self, reader):
@@ -233,11 +247,11 @@ class BgrToGray(VideoSupplier):
 
     def read(self, index, force_type=np):
         img = self.inputs[0].read(index=index // 3, force_type=force_type)
-        return img[:,:,[index % 3]]
+        return img[:, :, [index % 3]]
 
 
 class ChangeFramerate(VideoSupplier):
-    def __init__(self, reader, factor = 1):
+    def __init__(self, reader, factor=1):
         super().__init__(n_frames=int(np.round(reader.n_frames / factor)), inputs=(reader,))
         self.factor = factor
 
@@ -259,7 +273,8 @@ class ConstFrame(VideoSupplier):
 
 class FrameDifference(VideoSupplier):
     def __init__(self, reader):
-        super().__init__(n_frames=reader.n_frames - 1, inputs = (reader,))
+        super().__init__(n_frames=reader.n_frames - 1, inputs=(reader,))
 
     def read(self, index, force_type=np):
-        return 128 + self.inputs[0].read(index=index + 1, force_type=force_type) - self.inputs[0].read(index=index, force_type=force_type)
+        return 128 + self.inputs[0].read(index=index + 1, force_type=force_type) - self.inputs[0].read(index=index,
+                                                                                                       force_type=force_type)
