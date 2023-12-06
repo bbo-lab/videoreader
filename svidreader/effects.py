@@ -215,10 +215,17 @@ class PermutateFrames(VideoSupplier):
         super().__init__(n_frames=n_frames, inputs=(reader,))
 
     def read(self, index, force_type=np):
-        if (isinstance(self.permutation, dict) and index in self.permutation) or (index >= 0 and index < len(self.permutation)):
-            return self.inputs[0].read(index=self.permutation[index], force_type=force_type)
-        else:
-            return self.invalid
+        def valid_output(): return self.inputs[0].read(index=self.permutation[index], force_type=force_type)
+
+        if isinstance(self.permutation, dict):
+            if index in self.permutation:
+                return valid_output()
+            else:
+                pass
+        elif 0 <= index < len(self.permutation):
+            return valid_output()
+
+        return self.invalid
 
 class BgrToGray(VideoSupplier):
     def __init__(self, reader):
