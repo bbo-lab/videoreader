@@ -28,14 +28,12 @@ def main():
     files = []
     if args.input is not None:
         for f in args.input:
-            if os.path.isdir(f):
-                if args.recursive:
-                    get_files_recursive(f, files)
-            elif os.path.isfile(f):
+            if os.path.isdir(f) and args.recursive:
+                get_files_recursive(f, files)
+            elif os.path.exists(f):
                 files.append(f)
             else:
                 raise Exception("File " + f + " not found")
-
 
     if args.frames is not None:
         for f in args.frames:

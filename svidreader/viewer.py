@@ -170,9 +170,9 @@ class MatplotlibViewer(VideoSupplier):
             raise Exception(f'Backend {backend} not known')
         self.pipe = None
 
-    def read(self, index,source=None):
+    def read(self, index,source=None, force_type=np):
         self.frame = index
-        img = self.inputs[0].read(index)
+        img = VideoSupplier.convert(self.inputs[0].read(index, force_type=force_type), np)
         if self.backend == "opencv":
             import cv2
             try:
