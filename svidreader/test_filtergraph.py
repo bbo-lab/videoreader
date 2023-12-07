@@ -8,11 +8,11 @@ class DummyIndexVideo(VideoSupplier):
     def __init__(self, num_frames=10):
         super().__init__(num_frames, ())
 
-    def read(self, index):
-        return np.full(shape=(1, 1, 1), fill_value=index)
+    def read(self, index, force_type=np):
+        return VideoSupplier.convert(np.full(shape=(1, 1, 1), fill_value=index), force_type)
 
 
-class TestStringMethods(unittest.TestCase):
+class TestFilterFunctions(unittest.TestCase):
     def test_named_graph(self):
         fg = filtergraph.create_filtergraph_from_string([filtergraph.get_reader("./test/cubes.mp4", cache=False)],
                                                         '[input_0]cache[cached];[cached]tblend[out]')
@@ -43,7 +43,6 @@ class TestStringMethods(unittest.TestCase):
         print("ran at ", len(reader) / (time.time() - starttime), "fps")
 
     def test_iterator(self):
-        print('hi')
         reader = DummyIndexVideo(num_frames=10)
         import itertools
         for (i_frame, frame) in enumerate(itertools.islice(reader, 2, 5)):

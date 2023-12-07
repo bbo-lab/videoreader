@@ -15,8 +15,8 @@ class ImageRange(VideoSupplier):
         super().__init__(n_frames=len(self.frames), inputs=())
         self.ncols = ncols
 
-    def read(self, index):
-        return imageio.imread(self.frames[index])
+    def read(self, index, force_type=np):
+        return VideoSupplier.convert(imageio.imread(self.frames[index]), force_type)
 
     def get_key_indices(self):
         return None

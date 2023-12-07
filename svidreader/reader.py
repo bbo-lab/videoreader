@@ -1,5 +1,6 @@
 import hashlib
 import imageio.v3 as iio
+import imageio.v2 as iio2
 import numpy as np
 from svidreader.video_supplier import VideoSupplier
 from svidreader.imagecache import ImageCache
@@ -25,9 +26,12 @@ class SVidReader(VideoSupplier):
         if pipe >= 0:
             self.video = self.video[0:pipe]
         self.vprops = iio.improps(self.video, plugin=self.plugin)
-        self.mdata = iio.immeta(self.video, plugin=self.plugin)
+        self.mdata = iio.immeta(self.video, plugin=self.plugin, exclude_applied=False)
         self.reader = iio.imopen(self.video, "r", plugin=self.plugin)
-        self.reader.n_frames = self.vprops.shape[0]
+        if video[-4:] == '.ccv':
+            self.reader.n_frames = len(iio2.get_reader(self.video))
+        else:
+           self.reader.n_frames = self.vprops.shape[0]
         if cache is None:
             def get_key_indices():
                 return None
@@ -120,11 +124,11 @@ class SVidReader(VideoSupplier):
                 self.hash = int(hash_fun.hexdigest(), 16)
             return self.hash
 
-    def read(self, index):
+    def read(self, index, force_type=np):
         tmp = self.get_data(fr_idx = index)
         if len(tmp.shape) == 2:
             tmp = tmp[:,:,np.newaxis]
-        return tmp
+        return VideoSupplier.convert(tmp, force_type)
 
     def improps(self):
         return self.vprops

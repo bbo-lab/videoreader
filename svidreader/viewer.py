@@ -38,20 +38,22 @@ class MatplotlibViewer(VideoSupplier):
             self.th = None
             plt.tight_layout()
             plt.show(block=False)
-        if backend == "qt":
+        elif backend == "qt":
             self.gui_loaded = False
-            def redraw(source=None, img=None):
+            def redraw(source=None, current_frame=None):
                 if not self.gui_loaded:
                     return
                 self.updating = True
                 self.textbox_frame.setText(str(self.frame))
-                if img is None:
-                    img = self.read(self.frame)
+                if current_frame is None:
+                    current_frame = self.read(self.frame)
                 if source != self.slider_frame:
                     self.slider_frame.setValue(self.frame)
                 if source != self.textbox_frame:
                     self.textbox_frame.setText(str(self.slider_frame.value()))
-                self.img.setImage(np.swapaxes(img, 0, 1),autoLevels=False)
+                if len(current_frame) == 3 and current_frame.shape[2] == 2:
+                    current_frame = np.dstack((current_frame[:,:,0],current_frame[:,:,1],current_frame[:,:,1]))
+                self.img.setImage(np.swapaxes(current_frame, 0, 1),autoLevels=current_frame.dtype!=np.uint8)
                 self.updating = False
 
             self.redraw = redraw
@@ -65,13 +67,11 @@ class MatplotlibViewer(VideoSupplier):
                 self.redraw(source=self.slider_frame)
 
             def run_qt():
-                from matplotlib.widgets import TextBox
                 from PyQt5.QtCore import Qt
                 from PyQt5 import QtWidgets
                 from PyQt5.QtWidgets import QApplication, QVBoxLayout, QHBoxLayout, QLineEdit, QWidget, QSlider, QComboBox, QPushButton, QButtonGroup
                 from pyqtgraph import PlotWidget, plot
                 import pyqtgraph as pg
-                import sys  # We need sys so that we can pass argv to QApplication
                 import os
                 from PyQt5.QtCore import QTimer
 
@@ -85,7 +85,10 @@ class MatplotlibViewer(VideoSupplier):
                 globalLayout.addWidget(self.graphWidget)
 
                 self.updating = True
-                self.img = pg.ImageItem(np.swapaxes(self.read(0), 0, 1), autoLevels=False)
+                current_frame = self.read(0)
+                if len(current_frame) == 3 and current_frame.shape[2] == 2:
+                    current_frame = np.dstack((current_frame[:,:,0],current_frame[:,:,1],current_frame[:,:,1]))
+                self.img = pg.ImageItem(np.swapaxes(current_frame, 0, 1), autoLevels=current_frame.dtype!=np.uint8)
                 self.updating = False
                 self.graphWidget.addItem(self.img)
 
@@ -161,12 +164,15 @@ class MatplotlibViewer(VideoSupplier):
             else:
                 gui_callback("runqt")
                 gui_callback(run_qt)
-
+        elif backend == 'ffplay' or backend == 'skimage':
+            pass
+        else:
+            raise Exception(f'Backend {backend} not known')
         self.pipe = None
 
-    def read(self, index,source=None):
+    def read(self, index,source=None, force_type=np):
         self.frame = index
-        img = self.inputs[0].read(index)
+        img = VideoSupplier.convert(self.inputs[0].read(index, force_type=force_type), np)
         if self.backend == "opencv":
             import cv2
             try:
@@ -176,15 +182,19 @@ class MatplotlibViewer(VideoSupplier):
         elif self.backend == "ffplay":
             import os
             import subprocess as sp
+            if len(img.shape) == 2:
+                img = img[:,:,np.newaxis]
             if self.pipe == None:
                 command = ["ffmpeg.ffplay",
                            '-f', 'rawvideo',
                            '-vcodec', 'rawvideo',
                            '-video_size', str(img.shape[1]) + 'x' + str(img.shape[0]),  # size of one frame
-                           '-pixel_format', 'rgb24' if len(img.shape) == 3 and img.shape[2] == 3 else 'gray8',
+                           '-pixel_format', 'rgb24' if img.shape[2] >= 2 else 'gray8',
                            '-framerate', '200',
                            '-i','-']
                 self.pipe = sp.Popen(command, stdin=sp.PIPE, stderr=sp.STDOUT, bufsize=1000, preexec_fn=os.setpgrp)
+            if img.shape[2] == 2:
+                img = np.dstack((img[:,:,0],img[:,:,1],img[:,:,1]))
             self.pipe.stdin.write(img.astype(np.uint8).tobytes())
         elif self.backend == "skimage":
             from skimage import io
@@ -202,7 +212,7 @@ class MatplotlibViewer(VideoSupplier):
                 self.updating = False
         elif self.backend == "qt":
             if not self.updating:
-                self.redraw(source = None, img=img)
+                self.redraw(source = None, current_frame=img)
         else:
             raise Exception("Unknown backend")
         return img

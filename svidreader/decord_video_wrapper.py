@@ -3,6 +3,8 @@ import numpy as np
 from svidreader.video_supplier import VideoSupplier
 from threading import Thread, Lock
 import time
+import logging
+
 
 class DecordVideoReader(VideoSupplier):
     def __init__(self, filename):
@@ -16,6 +18,7 @@ class DecordVideoReader(VideoSupplier):
         self.t = Thread(target=self.seek_end)
         self.mutex = Lock()
         self.last_read = 0
+        self.last_index = 0
         self.t.start()
 
 
@@ -34,13 +37,15 @@ class DecordVideoReader(VideoSupplier):
         self.closed = True
         super().close()
 
-    def read(self, index):
+    def read(self, index, force_type=np):
         with self.mutex:
             frame = self.vr.get_batch([index]).asnumpy()
             self.last_read = time.time()
-        res = frame[0]
+        if index != self.last_index + 1:
+            logging.debug(f"Non-sequential {self.last_index} to {index}")
         self.count += 1
-        return np.copy(res)
+        self.last_index = index
+        return VideoSupplier.convert(frame[0], force_type)
 
 
     def get_meta_data(self):

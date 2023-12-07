@@ -1,6 +1,6 @@
 from svidreader.video_supplier import VideoSupplier
 from enum import Enum
-
+import numpy as np
 
 class Mode(Enum):
     BLINKING = 0
@@ -62,13 +62,13 @@ class LightDetector(VideoSupplier):
             return data.astype(xp.uint8)
         return normalize_impl
 
-    def read(self, index):
+    def read(self, index, force_type=np):
         import cupy as cp
         xp = cp
         if index in self.cache:
             lastframe = self.cache[index]
         else:
-            lastframe = xp.asarray(self.inputs[0].read(index=index))
+            lastframe = self.inputs[0].read(index=index, force_type=xp)
             lastframe= lastframe.astype(xp.float32)
             lastframe = xp.square(lastframe)
 
@@ -76,7 +76,7 @@ class LightDetector(VideoSupplier):
             if index + 1 in self.cache:
                 curframe = self.cache[index + 1]
             else:
-                curframe = xp.asarray(self.inputs[0].read(index=index + 1))
+                curframe = self.inputs[0].read(index=index + 1, force_type=xp)
                 curframe = curframe.astype(xp.float32)
                 curframe = xp.square(curframe)
         self.cache.clear()
@@ -90,4 +90,4 @@ class LightDetector(VideoSupplier):
         else:
             res = lastframe
         res = self.convolve_big(res)
-        return xp.asnumpy(self.normalize(res, divide))
+        return VideoSupplier.convert(self.normalize(res, divide), force_type)

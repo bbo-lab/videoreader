@@ -6,6 +6,7 @@ import queue
 import os
 import threading
 import time
+import logging
 
 
 def main():
@@ -18,19 +19,21 @@ def main():
     parser.add_argument('-vr','--videoreader', default='iio', choices=('iio', 'decord'))
     parser.add_argument('-ac', '--autocache', default='True', choices=('True','False'))
     parser.add_argument('-mp', '--matplotlib', action='store_true', default=False, help='Activate Matplotlib')
+    parser.add_argument('-d', '--debug',help="Print lots of debugging statements",action="store_const", dest="loglevel", const=logging.DEBUG,default=logging.WARNING)
+    parser.add_argument('-v', '--verbose',help="Be verbose",action="store_const", dest="loglevel", const=logging.INFO,)
     args = parser.parse_args()
+
+    logging.basicConfig(level=args.loglevel)
 
     files = []
     if args.input is not None:
         for f in args.input:
-            if os.path.isdir(f):
-                if args.recursive:
-                    get_files_recursive(f, files)
-            elif os.path.isfile(f):
+            if os.path.isdir(f) and args.recursive:
+                get_files_recursive(f, files)
+            elif os.path.exists(f):
                 files.append(f)
             else:
                 raise Exception("File " + f + " not found")
-
 
     if args.frames is not None:
         for f in args.frames:
@@ -86,13 +89,14 @@ def main():
         def __init__(self):
             self.lastval = -1
 
-        def print(self, finished, fps=""):
+        def print(self, finished, fps="", remaining=0):
             val = int(finished * 1000)
             if self.lastval == val:
                 return
             self.lastval = val
             sys.stdout.write('\r')
-            sys.stdout.write("[%-20s] %.1f%% %.1f%%fps    " % ('=' * (val // 50), finished * 100, fps))
+            str = "[%-20s] %.1f%% %.1f fps %0.1f minutes" % ('=' * (val // 50), finished * 100, fps, remaining)
+            sys.stdout.write(str)
             sys.stdout.flush()
 
     if args.matplotlib:
@@ -103,15 +107,18 @@ def main():
         pp = process_printer()
         curtime = time.time()
         lasttime = curtime
-        for i in range(0, out.n_frames):
-            if i % 100 == 0:
-                lasttime = curtime
-                curtime = time.time()
-            data = out.read(index=i)
-            if outputfile is not None:
-                outputfile.write(str(i) + ' ' + ' '.join(map(str, np.asarray([data]).flatten())) + '\n')
-            pp.print(i / out.n_frames, fps = 100 / (curtime - lasttime))
-
+        try:
+            for i in range(0, out.n_frames):
+                if i % 100 == 0:
+                    lasttime = curtime
+                    curtime = time.time()
+                data = out.read(index=i)
+                if outputfile is not None:
+                    outputfile.write(str(i) + ' ' + ' '.join(map(str, np.asarray([data]).flatten())) + '\n')
+                pp.print(i / out.n_frames, fps = 100 / (curtime - lasttime), remaining=(out.n_frames - i) * ((curtime - lasttime) / 100)/60)
+        except Exception:
+            out.close()
+            raise
         if outputfile is not None:
             outputfile.close()
     if app is not None:

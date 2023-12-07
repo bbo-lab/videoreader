@@ -37,42 +37,29 @@ class AnalyzeImage(VideoSupplier):
         if self.lib == 'cupy':
             import cupy as cp
             self.sqnorm = cp.fuse(sqnorm(cp))
+            self.xp = cp
         elif self.lib == 'jax':
             import jax
             self.sqnorm = jax.jit(sqnorm(jax.numpy))
+            self.xp = jax.numpy
         elif self.lib == 'nb':
             import numba as nb
             self.sqnorm = nb.jit(sqnorm(np))
+            self.analyze = nb.jit(analyze)
+            self.xp = np
         else:
             self.sqnorm = sqnorm(np)
+            self.xp = np
 
 
     def read(self, index):
-        img = self.inputs[0].read(index=index)
-        contrast = 0
-        brightness = 0
-        if self.lib == 'cupy':
-            import cupy as cp
-            img = cp.asarray(img, dtype=cp.float32)
-            gy, gx = cp.gradient(img, axis=(0, 1))
-            contrast = cp.average(self.sqnorm(gx,gy))
-            brightness = cp.average(img)
-        elif self.lib == 'jax':
-            import jax
-            img = jax.numpy.asarray(img, dtype = jax.numpy.float32)
-            img = jax.device_put(img, device=jax.devices('gpu')[0])
-            gy, gx = jax.numpy.gradient(img, axis=(0, 1))
-            contrast = jax.numpy.average(self.sqnorm(gx,gy))
-            brightness = jax.numpy.average(img)
-        elif self.lib == 'nb':
+        img = self.inputs[0].read(index=index, force_type=self.xp)
+        if self.lib == 'nb':
             import numba as nb
-            self.analyze = nb.jit(analyze)
-            cr, av = analyze(img.astype(np.float32))
-            contrast = cr
-            brightness = av
+            contrast, brightness = analyze(img.astype(self.xp.float32))
         else:
-            gy, gx = np.gradient(img.astype(np.float32), axis=(0, 1))
-            gx = self.sqnorm(gx, gy)
-            contrast = np.average(gx)
-            brightness = np.average(img)
+            img = self.xp.asarray(img, dtype=self.xp.float32)
+            gy, gx = self.xp.gradient(img, axis=(0, 1))
+            contrast = self.xp.average(self.sqnorm(gx, gy))
+            brightness = self.xp.average(img)
         return {'contrast': contrast, 'brightness': brightness}
