@@ -116,6 +116,7 @@ class MaxIndex(VideoSupplier):
     @staticmethod
     def get_maxpixels(img, count, radius):
         import cv2
+        img = np.copy(img)
         res = np.zeros(shape=(count, 2), dtype=int)
         for i in range(count):
             maxpix = np.argmax(img)
@@ -133,8 +134,7 @@ class MaxIndex(VideoSupplier):
         return "max"
 
     def read(self, index, force_type=None):
-        img = self.inputs[0].read(index=index)
-        img = VideoSupplier.convert(img, np)
+        img = self.inputs[0].read(index=index, force_type=np)
         locations = MaxIndex.get_maxpixels(img, self.count, self.radius)
         values = img[(*locations.T,)]
         res = {}
