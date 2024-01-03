@@ -16,7 +16,10 @@ class ImageRange(VideoSupplier):
         self.ncols = ncols
 
     def read(self, index, force_type=np):
-        return VideoSupplier.convert(imageio.imread(self.frames[index]), force_type)
+        res = imageio.imread(self.frames[index])
+        if res.ndim == 2:
+            res = res[:,:,np.newaxis]
+        return VideoSupplier.convert(res, force_type)
 
     def get_key_indices(self):
         return None
