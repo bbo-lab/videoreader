@@ -8,19 +8,11 @@ from svidreader.effects import Crop
 from svidreader.effects import ConstFrame
 from svidreader.effects import DumpToFile
 from svidreader.effects import Arange
-<<<<<<< HEAD
 from svidreader.effects import PermutateFrames
 from svidreader.effects import DumpToFile
 from svidreader.effects import Math
 from svidreader.effects import MaxIndex
 from svidreader.effects import ChangeFramerate
-=======
-from svidreader.effects import DumpToFile
-from svidreader.viewer import MatplotlibViewer
-from svidreader import SVidReader
-from svidreader.cameraprojection import PerspectiveCameraProjection
-from ccvtools import rawio
->>>>>>> 3181210 (Added working Cameraprojection and fixed some smaller bugs)
 
 def find_ignore_escaped(str, tofind):
     single_quotes = False
