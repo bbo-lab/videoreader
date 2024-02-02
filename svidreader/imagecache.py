@@ -160,14 +160,14 @@ class ImageCache(VideoSupplier):
             for i in range(self.last_read + 1, index):
                 data = self.inputs[0].read(index=i, force_type=force_type)
                 with self.lock:
-                    self.add_to_cache(i, data, hash(self.inputs[0]) * 7 + index)
+                    self.add_to_cache(i, data, 1 * 7 + index)
             self.last_read = index - 1
         elif self.last_read + 1 != index:
             logging.debug(f'nonsequential read {self.last_read} to {index}')
         data = self.inputs[0].read(index=index, force_type=force_type)
         self.last_read = index
         with self.lock:
-            res = self.add_to_cache(index, data, hash(self.inputs[0]) * 7 + index)
+            res = self.add_to_cache(index, data, 1 * 7 + index)
             self.clean()
             return res
 
