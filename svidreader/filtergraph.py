@@ -102,7 +102,8 @@ def get_reader(filename, backend="decord", cache=False, options={}):
     if pipe >= 0:
         pipeline = filename[pipe + 1:]
         filename = filename[0:pipe]
-    if os.path.isdir(filename):
+    from svidreader import get_imageEndings
+    if os.path.isdir(filename) or filename.endswith(get_imageEndings()):
         from svidreader import ImageReader
         res = ImageReader.ImageRange(filename)
         processes = 10
@@ -115,7 +116,7 @@ def get_reader(filename, backend="decord", cache=False, options={}):
     else:
         raise Exception('Unknown videoreader')
     if cache:
-        res = ImageCache(res, maxcount=200, processes = processes)
+        res = ImageCache(res, maxcount=200, processes=processes)
     if pipeline is not None:
         res = create_filtergraph_from_string([res], pipeline, options=options)['out']
     return res
@@ -253,6 +254,11 @@ def create_filtergraph_from_string(inputs, pipeline, gui_callback=None, options=
             elif effectname == "scale":
                 assert len(curinputs) == 1
                 last = Scale(reader=curinputs[0], scale=float(effect_options['scale']))
+            elif effectname == "overlay":
+                assert len(curinputs) == 2
+                from svidreader.effects import Overlay
+                last = Overlay(reader=curinputs[0], overlay=curinputs[1], x=effect_options.get('x', 0),
+                               y=effect_options.get('y', 0))
             else:
                 raise Exception("Effectname " + effectname + " not known")
             for out in curoutputs:

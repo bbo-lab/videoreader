@@ -55,6 +55,8 @@ class SVidReader(VideoSupplier):
         self.n_frames = self.reader.n_frames
         self.mdata['num_frames'] = self.n_frames
 
+        super().__init__(n_frames=self.n_frames, inputs=(self.reader,))
+
     def __enter__(self):
         return self
 

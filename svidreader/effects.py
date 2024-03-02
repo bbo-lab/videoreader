@@ -278,3 +278,42 @@ class FrameDifference(VideoSupplier):
     def read(self, index, force_type=np):
         return 128 + self.inputs[0].read(index=index + 1, force_type=force_type) - self.inputs[0].read(index=index,
                                                                                                        force_type=force_type)
+
+
+class Overlay(VideoSupplier):
+    def __init__(self, reader, overlay, x=0, y=0):
+        super().__init__(n_frames=reader.n_frames, inputs=(reader, overlay))
+        self.x = x
+        self.y = y
+        for var in ['x', 'y']:
+            if isinstance(getattr(self, var), str):
+                val = getattr(self, var)
+                if val.isnumeric():
+                    setattr(self, var, int(val))
+                else:
+                    main_h, main_w, _ = reader.get_shape()
+                    overlay_h, overlay_w, _ = overlay.get_shape()
+                    locals_dict = locals()
+                    for rep_key in ['main_w', 'main_h', 'overlay_w', 'overlay_h']:
+                        val = val.replace(rep_key, str(locals_dict[rep_key]))
+                    setattr(self, var, int(eval(val)))
+
+        self.overlay_index = lambda index: index
+        if reader.n_frames != overlay.n_frames:
+            self.overlay_index = lambda index: 0
+
+        self.overlay_mode = 'replace'
+        if reader.get_shape()[2] != overlay.get_shape()[2]:
+            self.overlay_mode = 'bool'
+
+    def read(self, index, force_type=np):
+        img = self.inputs[0].read(index=index, force_type=force_type)
+        overlay = self.inputs[1].read(index=self.overlay_index(index),
+                                      force_type=force_type)
+        if self.overlay_mode == 'replace':
+            img[self.y:self.y + overlay.shape[0], self.x:self.x + overlay.shape[1]] = overlay
+        elif self.overlay_mode == 'bool':
+            overlay = overlay < 128
+            overlay = np.repeat(overlay, img.shape[2], axis=2)
+            img[self.y:self.y + overlay.shape[0], self.x:self.x + overlay.shape[1]][overlay] = 0
+        return img
