@@ -12,7 +12,7 @@ class ImageRange(VideoSupplier):
         if os.path.isdir(folder_file):
             for f in np.sort(os.listdir(folder_file)):
                 if f.endswith(imageEndings):
-                    self.frames.append(folder + "/" + f)
+                    self.frames.append(folder_file + "/" + f)
         else:
             self.frames.append(folder_file)
 
