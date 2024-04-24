@@ -2,6 +2,7 @@ import hashlib
 import os
 from svidreader.imagecache import ImageCache
 from svidreader.effects import BgrToGray
+from svidreader.effects import GrayToBgr
 from svidreader.effects import FrameDifference
 from svidreader.effects import Scale
 from svidreader.effects import Crop
@@ -9,6 +10,7 @@ from svidreader.effects import ConstFrame
 from svidreader.effects import DumpToFile
 from svidreader.effects import Arange
 from svidreader.effects import PermutateFrames
+from svidreader.effects import Concatenate
 from svidreader.effects import DumpToFile
 from svidreader.effects import Math
 from svidreader.effects import MaxIndex
@@ -103,7 +105,7 @@ def get_reader(filename, backend="decord", cache=False, options={}):
         pipeline = filename[pipe + 1:]
         filename = filename[0:pipe]
     from svidreader import get_imageEndings
-    if os.path.isdir(filename) or filename.endswith(get_imageEndings()):
+    if os.path.isdir(filename) or filename.endswith(get_imageEndings()) or filename.endswith('.zip'):
         from svidreader import ImageReader
         res = ImageReader.ImageRange(filename)
         processes = 10
@@ -174,6 +176,9 @@ def create_filtergraph_from_string(inputs, pipeline, gui_callback=None, options=
             elif effectname == 'bgr2gray':
                 assert len(curinputs) == 1
                 last = BgrToGray(curinputs[0])
+            elif effectname == 'gray2bgr':
+                assert len(curinputs) == 1
+                last = GrayToBgr(curinputs[0])
             elif effectname == 'tblend':
                 assert len(curinputs) == 1
                 last = FrameDifference(curinputs[0])
@@ -208,6 +213,12 @@ def create_filtergraph_from_string(inputs, pipeline, gui_callback=None, options=
                 assert len(curinputs) == 1
                 from svidreader.light_detector import LightDetector
                 last = LightDetector(curinputs[0], mode=effect_options.get('mode','blinking'))
+            elif effectname == "normalized_contrast":
+                from svidreader.mask_unfocused import NormalizedContrast
+                last = NormalizedContrast(curinputs[0])
+            elif effectname == "radial_contrast":
+                from svidreader.local_radial import RadialContrast
+                last = RadialContrast(curinputs[0])
             elif effectname == "const":
                 assert len(curinputs) == 1
                 last = ConstFrame(curinputs[0], frame=int(effect_options.get('frame')))
@@ -248,9 +259,11 @@ def create_filtergraph_from_string(inputs, pipeline, gui_callback=None, options=
                 last = MatplotlibViewer(curinputs[0], backend=effect_options.get('backend','matplotlib'), gui_callback=gui_callback)
             elif effectname == "dump":
                 assert len(curinputs) == 1
-                last = DumpToFile(reader=curinputs[0], outputfile=effect_options['output'], makedir='mkdir' in effect_options, comment=effect_options.get('comment',None))
+                last = DumpToFile(reader=curinputs[0], outputfile=effect_options['output'], writer=effect_options.get('writer', None), opts=effect_options, makedir='mkdir' in effect_options, comment=effect_options.get('comment',None))
             elif effectname == "arange":
                 last = Arange(inputs=curinputs, ncols=int(effect_options.get('ncols','-1')))
+            elif effectname == "concatenate":
+                last = Concatenate(inputs=curinputs)
             elif effectname == "scale":
                 assert len(curinputs) == 1
                 last = Scale(reader=curinputs[0], scale=float(effect_options['scale']))
