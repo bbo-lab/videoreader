@@ -37,6 +37,7 @@ class AnalyzeImage(VideoSupplier):
         if self.lib == 'cupy':
             import cupy as cp
             self.sqnorm = cp.fuse(sqnorm(cp))
+            self.convolve = AnalyzeImage.get_convolve(cp, cupyx.scipy.ndimage)
             self.xp = cp
         elif self.lib == 'jax':
             import jax

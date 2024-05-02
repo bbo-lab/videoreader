@@ -34,8 +34,8 @@ class DumpToFile(VideoSupplier):
         if self.pipe is not None:
             self.pipe.stdin.close()
 
-    def read(self, index):
-        data = self.inputs[0].read(index=index)
+    def read(self, index, force_type=np):
+        data = self.inputs[0].read(index=index, force_type=force_type)
         if self.type == "movie":
             import imageio
             if self.output is None:
