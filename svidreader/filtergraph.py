@@ -223,7 +223,7 @@ def create_filtergraph_from_string(inputs, pipeline, gui_callback=None, options=
                 assert len(curinputs) == 1
                 last = ConstFrame(curinputs[0], frame=int(effect_options.get('frame')))
             elif effectname == "math":
-                last = Math(curinputs, expression=effect_options.get('exp'), library=effect_options.get('library','np'))
+                last = Math(curinputs, expression=effect_options.get('exp'), library=effect_options.get('library','numpy'))
             elif effectname == "crop":
                 assert len(curinputs) == 1
                 w = -1
