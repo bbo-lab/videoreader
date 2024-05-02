@@ -3,16 +3,23 @@ import numpy as np
 
 
 class DumpToFile(VideoSupplier):
-    def __init__(self, reader, outputfile, makedir=False, comment=None):
+    def __init__(self, reader, outputfile, writer=None, opts={}, makedir=False, comment=None):
         import imageio
         super().__init__(n_frames=reader.n_frames, inputs=(reader,))
         self.outputfile = outputfile
+        self.output = None
+        self.pipe = None
+        self.opts = opts
         if makedir:
             from pathlib import Path
             Path(outputfile).parent.mkdir(parents=True, exist_ok=True)
-        if outputfile.endswith('.mp4'):
+        if writer is not None and writer == "ffmpeg":
+            self.type = "ffmpeg_movie"
+        elif outputfile.endswith('.mp4'):
             self.type = "movie"
-            self.output = imageio.get_writer(outputfile)
+            self.outputfile = outputfile
+        elif outputfile.endswith('.zip'):
+            self.type = "zip"
         else:
             self.type = "csv"
             self.mapkeys = None
@@ -22,11 +29,17 @@ class DumpToFile(VideoSupplier):
 
     def close(self):
         super().close()
-        self.output.close()
+        if self.output is not None:
+            self.output.close()
+        if self.pipe is not None:
+            self.pipe.stdin.close()
 
-    def read(self, index):
-        data = self.inputs[0].read(index=index)
+    def read(self, index, force_type=np):
+        data = self.inputs[0].read(index=index, force_type=force_type)
         if self.type == "movie":
+            import imageio
+            if self.output is None:
+                self.output = imageio.get_writer(self.outputfile, fps=200, quality=8)
             if data is not None:
                 self.output.append_data(data)
         elif self.type == "csv":
@@ -34,6 +47,63 @@ class DumpToFile(VideoSupplier):
                 self.mapkeys = data.keys()
                 self.output.write(f"index {' '.join(self.mapkeys)} \n")
             self.output.write(f"{index} {' '.join([str(data[k]) for k in self.mapkeys])} \n")
+        elif self.type == "zip":
+            import cv2
+            import zipfile
+            if self.output is None:
+                self.output = zipfile.ZipFile(self.outputfile, mode="w")
+            img_name = "{:06d}.png".format(index)
+            encode_param = [int(cv2.IMWRITE_PNG_COMPRESSION), 6]
+            if index % 10 != 0:
+                data = np.copy(data)
+                data -= self.inputs[0].read(index=(index // 10) * 10)
+                data += 127
+            png_encoded = cv2.imencode('.png', data, encode_param)[1].tostring()
+            self.output.writestr(img_name, png_encoded)
+        elif self.type == "ffmpeg_movie":
+            import subprocess as sp
+            import os
+            if self.pipe is None:
+                encoder = self.opts.get('encoder','libx264')
+                if encoder is None:
+                    encoder = 'hevc_nvenc'
+                if encoder == 'hevc_nvenc':
+                    codec = ['-i', '-', '-an', '-vcodec', 'hevc_nvenc']
+                elif encoder == 'h264_nvenc':
+                    codec = ['-i', '-', '-an', '-vcodec', 'h264_nvenc']
+                elif encoder == '264_vaapi':
+                    codec = ['-hwaccel', 'vaapi' '-hwaccel_output_format', 'hevc_vaapi', '-vaapi_device',
+                             '/dev/dri/renderD128', '-i',
+                             '-', '-an', '-c:v', 'hevc_vaapi']
+                elif encoder == 'uncompressed':
+                    codec = ['-f', 'rawvideo']
+                elif encoder == 'libx264':
+                    codec = ['-i', '-', '-vcodec', 'libx264']
+                elif encoder == 'h264_v4l2m2m':
+                    codec = ['-i', '-', '-c:v', 'h264_v4l2m2m']
+                elif encoder == 'dummy':
+                    codec = ['null']
+                else:
+                    raise Exception("Encoder " + args.encoder + " not known")
+                pix_fmt = 'rgb24'
+                if data.shape[2] == 1:
+                    pix_fmt = 'gray8'
+                command = ["ffmpeg",
+                           '-y',  # (optional) overwrite output file if it exists
+                           '-f', 'rawvideo',
+                           '-vcodec', 'rawvideo',
+                           '-s', f'{data.shape[1]}x{data.shape[0]}',  # size of one frame
+                           '-pix_fmt', pix_fmt,
+                           '-r', '200',  # frames per second
+                           '-rtbufsize', '2G',
+                           *codec,
+                           '-preset', self.opts.get('preset', 'slow'),
+                           '-qmin', '10',
+                           '-qmax', '26',
+                           '-b:v', self.opts.get('bitrate', '10M'),
+                           self.outputfile]
+                self.pipe = sp.Popen(command, stdin=sp.PIPE, stderr=sp.STDOUT, bufsize=1000, preexec_fn=os.setpgrp)
+            self.pipe.stdin.write(data.tobytes())
         return data
 
 
@@ -58,6 +128,17 @@ class Arange(VideoSupplier):
                 res[col * maxdim[0]: col * maxdim[0] + img.shape[0],
                 row * maxdim[1]: row * maxdim[1] + img.shape[1]] = img
         return res
+
+
+class Concatenate(VideoSupplier):
+    def __init__(self, inputs):
+        super().__init__(n_frames=np.sum([inp.n_frames for inp in inputs]), inputs=inputs)
+        self.videostarts = np.cumsum([0] + [inp.n_frames for inp in inputs])
+
+    def read(self, index, force_type=np):
+        iinput = np.searchsorted(self.videostarts, index, side='right') - 1
+        index = index - self.videostarts[iinput]
+        return self.inputs[iinput].read(index, force_type=force_type)
 
 
 class Crop(VideoSupplier):
@@ -116,6 +197,7 @@ class MaxIndex(VideoSupplier):
     @staticmethod
     def get_maxpixels(img, count, radius):
         import cv2
+        img = np.copy(img)
         res = np.zeros(shape=(count, 2), dtype=int)
         for i in range(count):
             maxpix = np.argmax(img)
@@ -133,8 +215,7 @@ class MaxIndex(VideoSupplier):
         return "max"
 
     def read(self, index, force_type=None):
-        img = self.inputs[0].read(index=index)
-        img = VideoSupplier.convert(img, np)
+        img = self.inputs[0].read(index=index, force_type=np)
         locations = MaxIndex.get_maxpixels(img, self.count, self.radius)
         values = img[(*locations.T,)]
         res = {}
@@ -250,6 +331,14 @@ class BgrToGray(VideoSupplier):
         return img[:, :, [index % 3]]
 
 
+class GrayToBgr(VideoSupplier):
+    def __init__(self, reader):
+        super().__init__(n_frames=reader.n_frames // 3, inputs=(reader,))
+
+    def read(self, index, force_type=np):
+        return np.dstack([self.inputs[0].read(index=index * 3 + i, force_type=force_type) for i in range(3)])
+
+
 class ChangeFramerate(VideoSupplier):
     def __init__(self, reader, factor=1):
         super().__init__(n_frames=int(np.round(reader.n_frames / factor)), inputs=(reader,))
@@ -278,3 +367,42 @@ class FrameDifference(VideoSupplier):
     def read(self, index, force_type=np):
         return 128 + self.inputs[0].read(index=index + 1, force_type=force_type) - self.inputs[0].read(index=index,
                                                                                                        force_type=force_type)
+
+
+class Overlay(VideoSupplier):
+    def __init__(self, reader, overlay, x=0, y=0):
+        super().__init__(n_frames=reader.n_frames, inputs=(reader, overlay))
+        self.x = x
+        self.y = y
+        for var in ['x', 'y']:
+            if isinstance(getattr(self, var), str):
+                val = getattr(self, var)
+                if val.isnumeric():
+                    setattr(self, var, int(val))
+                else:
+                    main_h, main_w, _ = reader.get_shape()
+                    overlay_h, overlay_w, _ = overlay.get_shape()
+                    locals_dict = locals()
+                    for rep_key in ['main_w', 'main_h', 'overlay_w', 'overlay_h']:
+                        val = val.replace(rep_key, str(locals_dict[rep_key]))
+                    setattr(self, var, int(eval(val)))
+
+        self.overlay_index = lambda index: index
+        if reader.n_frames != overlay.n_frames:
+            self.overlay_index = lambda index: 0
+
+        self.overlay_mode = 'replace'
+        if reader.get_shape()[2] != overlay.get_shape()[2]:
+            self.overlay_mode = 'bool'
+
+    def read(self, index, force_type=np):
+        img = self.inputs[0].read(index=index, force_type=force_type)
+        overlay = self.inputs[1].read(index=self.overlay_index(index),
+                                      force_type=force_type)
+        if self.overlay_mode == 'replace':
+            img[self.y:self.y + overlay.shape[0], self.x:self.x + overlay.shape[1]] = overlay
+        elif self.overlay_mode == 'bool':
+            overlay = overlay < 128
+            overlay = np.repeat(overlay, img.shape[2], axis=2)
+            img[self.y:self.y + overlay.shape[0], self.x:self.x + overlay.shape[1]][overlay] = 0
+        return img

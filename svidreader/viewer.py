@@ -192,6 +192,7 @@ class MatplotlibViewer(VideoSupplier):
                            '-pixel_format', 'rgb24' if img.shape[2] >= 2 else 'gray8',
                            '-framerate', '200',
                            '-i','-']
+                print(command)
                 self.pipe = sp.Popen(command, stdin=sp.PIPE, stderr=sp.STDOUT, bufsize=1000, preexec_fn=os.setpgrp)
             if img.shape[2] == 2:
                 img = np.dstack((img[:,:,0],img[:,:,1],img[:,:,1]))

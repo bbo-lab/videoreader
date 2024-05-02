@@ -41,6 +41,7 @@ class PerspectiveCameraProjection(VideoSupplier):
             self.image_points = cs.project(final_points)[0]
             self.image_points = self.image_points.squeeze()[:, ::-1]
 
+
     @staticmethod
     def get_object_points(focal_length, image_h, image_w):
         """Function to generate object points with defined scaling factor and image dimensions"""
@@ -65,6 +66,7 @@ class PerspectiveCameraProjection(VideoSupplier):
                                                 frame,
                                                 bounds_error=False,
                                                 fill_value=0.0)
+
         perspective_image = interpolater(self.image_points, method=self.method)
         perspective_image = perspective_image.reshape(self.h, self.w, -1)
         np.round(perspective_image, out=perspective_image)

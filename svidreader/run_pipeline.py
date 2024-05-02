@@ -33,7 +33,7 @@ def main():
             elif os.path.exists(f):
                 files.append(f)
             else:
-                raise Exception("File " + f + " not found")
+                raise Exception(f"File {f} not found")
 
     if args.frames is not None:
         for f in args.frames:

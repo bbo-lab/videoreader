@@ -48,7 +48,6 @@ class TestFilterFunctions(unittest.TestCase):
         for (i_frame, frame) in enumerate(itertools.islice(reader, 2, 5)):
             assert np.all(reader.get_data(i_frame + 2) == frame)
 
-
     def test_permutation(self):
         reader = filtergraph.create_filtergraph_from_string([DummyIndexVideo(num_frames=10)],
                                                             "[input_0]permutate=map=./test/test_permutation.csv")['out']
