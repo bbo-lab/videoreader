@@ -35,12 +35,10 @@ class SVidReader(VideoSupplier):
         else:
            self.reader.n_frames = self.vprops.shape[0]
         if cache is None:
-            def get_key_indices():
-                return None
-            self.reader.get_key_indices = get_key_indices
+            self.reader.get_key_indices = lambda : None
             self.reader = ImageCache(self.reader, maxcount=500)
         elif cache != False:
-            cache.reader = reader
+            cache.inputs = (reader,)
             self.reader = cache
 
         if pipe >= 0:
