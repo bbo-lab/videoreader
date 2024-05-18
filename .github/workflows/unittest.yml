@@ -19,6 +19,7 @@ jobs:
           pip install .
           pip install decord
           pip install imageio[pyav]
+          pip install opencv-python
       - name: Test with pytest
         run: |
           pip install pytest

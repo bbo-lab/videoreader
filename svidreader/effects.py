@@ -50,15 +50,20 @@ class DumpToFile(VideoSupplier):
         elif self.type == "zip":
             import cv2
             import zipfile
+            import yaml
             if self.output is None:
                 self.output = zipfile.ZipFile(self.outputfile, mode="w")
+                self.keyframes = self.opts.get('keyframes', 1)
+                info = {'keyframes':self.keyframes}
+                self.output.writestr("info.yaml", yaml.dump(info))
             img_name = "{:06d}.png".format(index)
             encode_param = [int(cv2.IMWRITE_PNG_COMPRESSION), 6]
-            if index % 10 != 0:
-                data = np.copy(data)
-                data -= self.inputs[0].read(index=(index // 10) * 10)
-                data += 127
-            png_encoded = cv2.imencode('.png', data, encode_param)[1].tostring()
+            out_data = data
+            if index % self.keyframes != 0:
+                out_data = np.copy(out_data)
+                out_data -= self.inputs[0].read(index=(index // self.keyframes) * self.keyframes)
+                out_data += 127
+            png_encoded = cv2.imencode('.png', cv2.cvtColor(out_data, cv2.COLOR_RGB2BGR) if out_data.shape[2] == 3 else out_data, encode_param)[1].tostring()
             self.output.writestr(img_name, png_encoded)
         elif self.type == "ffmpeg_movie":
             import subprocess as sp

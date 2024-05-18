@@ -1,5 +1,5 @@
 import unittest
-import svidreader.filtergraph as filtergraph
+from svidreader import filtergraph
 import numpy as np
 from svidreader.video_supplier import VideoSupplier
 

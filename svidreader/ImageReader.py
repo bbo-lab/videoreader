@@ -19,13 +19,15 @@ class ImageRange(VideoSupplier):
         files = np.sort(files)
         for f in files:
             for ie in imageEndings:
-                if f.endswith(imageEndings):
-                    if self.zipfile is None:
-                        self.frames.append(folder_file + "/" + f)
-                    else:
-                        self.frames.append(f)
-
+                if f.endswith(ie):
+                    self.frames.append(folder_file + "/" + f if self.zipfile is None else f)
                     break
+            if f == "info.yml":
+                if self.zipfile is not None:
+                    buf = self.zipfile.read(self.frames[index])
+                    self.fileinfo = yaml.safe_load(buf)
+                    if keyframe is None:
+                        self.keyframe = fileinfo.get("keyframe", self.keyframe)
         super().__init__(n_frames=len(self.frames), inputs=())
         self.ncols = ncols
 
@@ -34,7 +36,10 @@ class ImageRange(VideoSupplier):
             import cv2
             buf = self.zipfile.read(self.frames[index])
             np_buf = np.frombuffer(buf, np.uint8)
-            return cv2.imdecode(np_buf, cv2.IMREAD_UNCHANGED)
+            res = cv2.imdecode(np_buf, cv2.IMREAD_UNCHANGED)
+            if res.ndim == 3 and res.shape[2] == 3:
+                res = cv2.cvtColor(res, cv2.COLOR_BGR2RGB)
+            return res
         return imageio.imread(self.frames[index])
 
     def read(self, index, force_type=np):
