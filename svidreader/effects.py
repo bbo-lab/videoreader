@@ -1,4 +1,5 @@
 from svidreader.video_supplier import VideoSupplier
+import multiprocessing
 import numpy as np
 
 
@@ -8,6 +9,7 @@ class DumpToFile(VideoSupplier):
         super().__init__(n_frames=reader.n_frames, inputs=(reader,))
         self.outputfile = outputfile
         self.output = None
+        self.l = multiprocessing.Lock()
         self.pipe = None
         self.opts = opts
         if makedir:
@@ -55,16 +57,18 @@ class DumpToFile(VideoSupplier):
                 self.output = zipfile.ZipFile(self.outputfile, mode="w")
                 self.keyframes = self.opts.get('keyframes', 1)
                 info = {'keyframes':self.keyframes}
-                self.output.writestr("info.yaml", yaml.dump(info))
+                with self.l:
+                    self.output.writestr("info.yaml", yaml.dump(info))
             img_name = "{:06d}.png".format(index)
             encode_param = [int(cv2.IMWRITE_PNG_COMPRESSION), 6]
-            out_data = data
+            out_data = VideoSupplier.convert(data, module=np)
             if index % self.keyframes != 0:
                 out_data = np.copy(out_data)
                 out_data -= self.inputs[0].read(index=(index // self.keyframes) * self.keyframes)
                 out_data += 127
             png_encoded = cv2.imencode('.png', cv2.cvtColor(out_data, cv2.COLOR_RGB2BGR) if out_data.shape[2] == 3 else out_data, encode_param)[1].tostring()
-            self.output.writestr(img_name, png_encoded)
+            with self.l:
+                self.output.writestr(img_name, png_encoded)
         elif self.type == "ffmpeg_movie":
             import subprocess as sp
             import os
@@ -144,6 +148,23 @@ class Concatenate(VideoSupplier):
         iinput = np.searchsorted(self.videostarts, index, side='right') - 1
         index = index - self.videostarts[iinput]
         return self.inputs[iinput].read(index, force_type=force_type)
+
+
+class MarkBorder(VideoSupplier):
+    def __init__(self, reader):
+        super().__init__(n_frames=reader.n_frames, inputs=(reader,))
+
+    def read(self, index, force_type=np):
+        image = self.inputs[0].read(index, force_type=force_type)
+        xp = force_type
+        border = xp.zeros_like(image, dtype=bool)
+        masked = image > 128
+        for i in range(2):
+            for dir in (-1,1):
+                xp.logical_or(xp.roll(masked, dir, axis=i), border, out=border)
+        xp.logical_and(border, ~masked, out=border)
+        return border.astype(np.uint8) * 255
+
 
 
 class Crop(VideoSupplier):

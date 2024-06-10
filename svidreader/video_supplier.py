@@ -1,5 +1,6 @@
 import inspect
 import logging
+import numpy as np
 
 logger = logging.getLogger(__name__)
 
@@ -46,7 +47,7 @@ class VideoSupplier:
             return {}
         return self.inputs[0].get_meta_data()
 
-    def read(self):
+    def read(self, index, force_type=np):
         raise NotImplementedError("This method has to be overriden")
 
     def get_data(self, index):

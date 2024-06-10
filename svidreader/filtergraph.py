@@ -246,6 +246,10 @@ def create_filtergraph_from_string(inputs, pipeline, gui_callback=None, options=
                 assert len(curinputs) == 1
                 from svidreader.cameraprojection import PerspectiveCameraProjection
                 last = PerspectiveCameraProjection(curinputs[0], config_file=effect_options.get('calibration', None))
+            elif effectname == "border":
+                assert len(curinputs) == 1
+                from svidreader.effects import MarkBorder
+                last = MarkBorder(curinputs[0])
             elif effectname == "scraper":
                 assert len(curinputs) == 1
                 from svidreader.videoscraper import VideoScraper
