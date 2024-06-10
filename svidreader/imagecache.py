@@ -79,12 +79,13 @@ class PriorityThreadPool(ThreadPool):
 
 class FrameStatus(IntEnum):
     NOT_CACHED = 0
-    LOADING_BG = 1
-    LOADING_FG = 2
-    CACHED = 3
+    LOADING_QUEUED_BG = 1
+    LOADING_QUEUED_FG = 2
+    LOADING = 3
+    CACHED = 4
 
 class ImageCache(VideoSupplier):
-    def __init__(self, reader, keyframes = None, maxcount = 100, processes = 1, preload=20):
+    def __init__(self, reader, keyframes = None, maxcount = 100, processes=1, preload=20, connect_segments=None):
         super().__init__(n_frames=reader.n_frames, inputs=(reader,))
         if self.n_frames > 0:
             self.framestatus = np.full(shape=(self.n_frames,),dtype=np.uint8,fill_value=FrameStatus.NOT_CACHED)
@@ -101,7 +102,7 @@ class ImageCache(VideoSupplier):
         self.last_read = 0
         self.num_preload_fwd = preload
         self.num_preload_bwd = preload
-        self.connect_segments = preload
+        self.connect_segments = preload if connect_segments is None else connect_segments
         self.keyframes = keyframes if keyframes is not None else reader.get_key_indices()
         self.ptp = PriorityThreadPool(processes=processes)
 
@@ -151,19 +152,31 @@ class ImageCache(VideoSupplier):
 
 
     def read_impl(self,index, force_type=None):
+        while self.framestatus[index] == FrameStatus.LOADING:
+            pass
         with self.lock:
-             res = self.cached.get(index)
-             if res is not None:
-                 return res
+            res = self.cached.get(index)
+            if res is not None:
+                return res
+            self.framestatus[index] = FrameStatus.LOADING
         #Connect segments to not jump through the video
         if index - self.last_read < self.connect_segments:
-            for i in range(self.last_read + 1, index):
+            begin = self.last_read + 1
+            if self.keyframes is not None:
+                last_keyframe = np.searchsorted(self.keyframes, index, side="right") - 1
+                if last_keyframe > 0:
+                    begin = max(self.keyframes[last_keyframe], begin)
+            for i in range(begin, index):
+                with self.lock:
+                    self.framestatus[i] = FrameStatus.LOADING
                 data = self.inputs[0].read(index=i, force_type=force_type)
                 with self.lock:
                     self.add_to_cache(i, data, 1 * 7 + index)
             self.last_read = index - 1
         elif self.last_read + 1 != index:
             logging.debug(f'nonsequential read {self.last_read} to {index}')
+        with self.lock:
+            self.framestatus[index] = FrameStatus.LOADING
         data = self.inputs[0].read(index=index, force_type=force_type)
         self.last_read = index
         with self.lock:
@@ -176,11 +189,12 @@ class ImageCache(VideoSupplier):
         if lazy:
             if self.framestatus[index] > FrameStatus.NOT_CACHED:
                 return
-            self.framestatus[index] = FrameStatus.LOADING_BG
+            self.framestatus[index] = FrameStatus.LOADING_QUEUED_BG
             priority = index + self.num_preload_bwd
         else:
-            self.framestatus[index] = FrameStatus.LOADING_FG
-            priority=index
+            if self.framestatus[index] != FrameStatus.LOADING:
+                self.framestatus[index] = FrameStatus.LOADING_QUEUED_FG
+            priority = index
         future = Future()
         return self.ptp.submit(lambda: self.read_impl(index, force_type=force_type), priority=priority, future=future)
 
@@ -195,7 +209,6 @@ class ImageCache(VideoSupplier):
     def read(self,index=None,blocking=True, force_type=np):
         if index >= self.n_frames:
             raise Exception('Out of bounds, frame ' + str(index) + ' of ' + str(self.n_frames) + 'requested')
-        res = None
         with self.lock:
             res = self.cached.get(index)
         if res is None:

@@ -6,22 +6,24 @@ import zipfile
 
 
 class ImageRange(VideoSupplier):
-    def __init__(self, folder_file, ncols=-1, keyframe=None):
+    def __init__(self, folder_file, keyframe=None):
         self.frames = []
         self.keyframe = keyframe
-        imageEndings = get_imageEndings()
         self.zipfile = None
+        self.imagefile = None
         if os.path.isfile(folder_file) and folder_file.endswith('.zip'):
             self.zipfile = zipfile.ZipFile(folder_file, "r")
             files = self.zipfile.namelist()
+        elif os.path.isfile(folder_file) and is_image(folder_file):
+            super().__init__(n_frames=10000000, inputs=())
+            self.imagefile = imageio.v2.imread(folder_file)
+            return
         else:
             files = os.listdir(folder_file)
         files = np.sort(files)
         for f in files:
-            for ie in imageEndings:
-                if f.endswith(ie):
-                    self.frames.append(folder_file + "/" + f if self.zipfile is None else f)
-                    break
+            if is_image(f):
+                self.frames.append(folder_file + "/" + f if self.zipfile is None else f)
             if f == "info.yml":
                 if self.zipfile is not None:
                     buf = self.zipfile.read(self.frames[index])
@@ -29,9 +31,10 @@ class ImageRange(VideoSupplier):
                     if keyframe is None:
                         self.keyframe = fileinfo.get("keyframe", self.keyframe)
         super().__init__(n_frames=len(self.frames), inputs=())
-        self.ncols = ncols
 
     def read_impl(self, index):
+        if self.imagefile is not None:
+            return self.imagefile
         if self.zipfile is not None:
             import cv2
             buf = self.zipfile.read(self.frames[index])
@@ -53,8 +56,20 @@ class ImageRange(VideoSupplier):
         return VideoSupplier.convert(res, force_type)
 
     def get_key_indices(self):
-        return None
+        return np.arange(0, self.n_frames)
 
+    def __del__(self):
+        super(ImageRange, self).__del__()
+        if self.zipfile is not None:
+            self.zipfile.close()
+            self.zipfile = None
+
+def is_image(filename):
+    imageEndings = get_imageEndings()
+    for ie in imageEndings:
+        if filename.endswith(ie):
+            return True
+    return False
 
 def get_imageEndings():
     return ".png", ".exr", ".jpg", ".bmp"
