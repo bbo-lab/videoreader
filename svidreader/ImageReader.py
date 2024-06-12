@@ -13,9 +13,12 @@ class ImageRange(VideoSupplier):
         self.zipfile = None
         self.imagefile = None
         if os.path.isfile(folder_file) and folder_file.endswith('.zip'):
-            self.zipfile = zipfile.ZipFile(folder_file, "r")
-            self.folder_file = folder_file
-            files = self.zipfile.namelist()
+            try:
+                self.folder_file = folder_file
+                self.zipfile = zipfile.ZipFile(folder_file, "r")
+                files = self.zipfile.namelist()
+            except Exception as e:
+                raise zipfile.BadZipFile(f"Cannot read file {self.folder_file}") from e
         elif os.path.isfile(folder_file) and is_image(folder_file):
             super().__init__(n_frames=10000000, inputs=())
             self.imagefile = imageio.v2.imread(folder_file)
