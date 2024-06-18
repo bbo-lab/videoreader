@@ -1,13 +1,13 @@
 import svidreader.filtergraph as filtergraph
-from svidreader.imagecache import ImageCache
 import numpy as np
 import argparse
 import queue
 import os
 import threading
-import time
 import logging
-
+import sys
+from tqdm import tqdm
+from tqdm.contrib.concurrent import thread_map
 
 def main():
     parser = argparse.ArgumentParser(description='Process program arguments.')
@@ -16,6 +16,7 @@ def main():
     parser.add_argument('-o', '--output')
     parser.add_argument('-g', '--filtergraph')
     parser.add_argument('-r', '--recursive')
+    parser.add_argument('-j', '--jobs', default=1, type=int)
     parser.add_argument('-vr','--videoreader', default='iio', choices=('iio', 'decord'))
     parser.add_argument('-ac', '--autocache', default='True', choices=('True','False'))
     parser.add_argument('-mp', '--matplotlib', action='store_true', default=False, help='Activate Matplotlib')
@@ -84,38 +85,23 @@ def main():
     if args.output is not None:
         outputfile = open(args.output, 'w')
 
-    import sys
-    class process_printer:
-        def __init__(self):
-            self.lastval = -1
-
-        def print(self, finished, fps="", remaining=0):
-            val = int(finished * 1000)
-            if self.lastval == val:
-                return
-            self.lastval = val
-            sys.stdout.write('\r')
-            str = "[%-20s] %.1f%% %.1f fps %0.1f minutes" % ('=' * (val // 50), finished * 100, fps, remaining)
-            sys.stdout.write(str)
-            sys.stdout.flush()
 
     if args.matplotlib:
         import matplotlib.pyplot as plt
         plt.gcf().canvas.draw_idle()
         plt.gcf().canvas.start_event_loop(0)
     else:
-        pp = process_printer()
-        curtime = time.time()
-        lasttime = curtime
         try:
-            for i in range(0, out.n_frames):
-                if i % 100 == 0:
-                    lasttime = curtime
-                    curtime = time.time()
-                data = out.read(index=i)
+            def process_frame(frame_idx):
+                data = out.read(index=frame_idx)
                 if outputfile is not None:
-                    outputfile.write(str(i) + ' ' + ' '.join(map(str, np.asarray([data]).flatten())) + '\n')
-                pp.print(i / out.n_frames, fps = 100 / (curtime - lasttime), remaining=(out.n_frames - i) * ((curtime - lasttime) / 100)/60)
+                    outputfile.write(f"{frame_idx} {' '.join(map(str, np.asarray([data]).flatten()))} \n")
+
+            if args.jobs != 1:
+                thread_map(process_frame, range(out.n_frames), max_workers=args.jobs, chunksize=1)
+            else:
+                for frame_idx in tqdm(range(out.n_frames)):
+                    process_frame(frame_idx)
         except Exception:
             out.close()
             raise
