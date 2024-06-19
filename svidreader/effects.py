@@ -54,13 +54,14 @@ class DumpToFile(VideoSupplier):
             import zipfile
             import yaml
             if self.output is None:
-                self.output = zipfile.ZipFile(self.outputfile, mode="w")
-                self.keyframes = self.opts.get('keyframes', 1)
-                info = {'keyframes':self.keyframes}
-                with self.l:
-                    self.output.writestr("info.yaml", yaml.dump(info))
+                with self.l: #Double check to make sure file was not created in the meantime
+                    if self.output is None:
+                        self.output = zipfile.ZipFile(self.outputfile, mode="w", compression=zipfile.ZIP_STORED)
+                        self.keyframes = self.opts.get('keyframes', 1)
+                        info = {'keyframes':self.keyframes}
+                        self.output.writestr("info.yaml", yaml.dump(info))
             img_name = "{:06d}.png".format(index)
-            encode_param = [int(cv2.IMWRITE_PNG_COMPRESSION), 6]
+            encode_param = [int(cv2.IMWRITE_PNG_COMPRESSION), 9]
             out_data = VideoSupplier.convert(data, module=np)
             if index % self.keyframes != 0:
                 out_data = np.copy(out_data)
