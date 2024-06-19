@@ -259,6 +259,7 @@ class Plot(VideoSupplier):
         super().__init__(n_frames=reader.n_frames, input=(reader,))
 
     def read(self, index):
+        import cv2
         img = self.inputs[0].read(index=index)
         data = self.inputs[1].read(index=index)
         img = np.copy(img)
