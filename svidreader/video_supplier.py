@@ -1,14 +1,20 @@
 import inspect
 import logging
 import numpy as np
+from enum import Enum
 
 logger = logging.getLogger(__name__)
 
+class ARRAY_MODULE_BEHAVIOR(Enum):
+    DEFAULT = 0
+    NATIVE = 1
+
 class VideoSupplier:
-    def __init__(self, n_frames, inputs = ()):
+    def __init__(self, n_frames, inputs=()):
         self.inputs = inputs
         self.n_frames = n_frames
         self.shape = None
+        self.default_array_module = np
 
     def __iter__(self):
         return VideoIterator(reader=self)
@@ -24,6 +30,12 @@ class VideoSupplier:
 
     def __del__(self):
         self.close()
+
+    def set_default_array_module(self, default_array_module):
+        self.default_array_module = default_array_module
+
+    def __getitem__(self, key):
+        return self.read(key, self.default_array_module)
 
     def close(self):
         for input in self.inputs:
