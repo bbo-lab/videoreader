@@ -27,5 +27,5 @@ dependencies = [
 name = "videoreader"
 version = "0.7.0"
 license = {file = "LICENSE"}
-description = ""
+description = "Video reader on top of imageio that allows to build custom filter-pipelines"
 readme = "README.md"
