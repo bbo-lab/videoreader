@@ -25,7 +25,7 @@ dependencies = [
     "setuptools>=70.0.0",
 ]
 name = "videoreader"
-version = "0.6.0"
+version = "0.7.0"
 license = {file = "LICENSE"}
 description = ""
 readme = "README.md"
