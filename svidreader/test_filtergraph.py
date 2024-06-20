@@ -28,6 +28,11 @@ class TestFilterFunctions(unittest.TestCase):
         for i in range(30,200):
             reader.get_data(i)
 
+    def test_brackets(self):
+        with filtergraph.get_reader("./test/cubes.mp4") as reader:
+            np.testing.assert_equal(reader.read(0), reader[0])
+
+
     def test_performance(self):
         import time
         reader = filtergraph.get_reader("./test/cubes.mp4|analyze", cache=True, options={'lib':'np'})
