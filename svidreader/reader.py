@@ -1,4 +1,6 @@
 import hashlib
+from copy import deepcopy
+
 import imageio.v3 as iio
 import imageio.v2 as iio2
 import numpy as np
@@ -133,10 +135,10 @@ class SVidReader(VideoSupplier):
         return VideoSupplier.convert(tmp, force_type)
 
     def improps(self):
-        return self.vprops
+        return deepcopy(self.vprops)
 
     def get_meta_data(self):
-        return self.mdata
+        return deepcopy(self.mdata)
 
     def __len__(self):
         return self.n_frames
