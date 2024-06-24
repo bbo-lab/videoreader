@@ -24,7 +24,7 @@ requires-python = "<4.0,>=3.6"
 dependencies = [
     "setuptools>=70.0.0",
 ]
-name = "videoreader"
+name = "bbo-svidreader"
 version = "0.7.0"
 license = {file = "LICENSE"}
 description = "Video reader on top of imageio that allows to build custom filter-pipelines"
