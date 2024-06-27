@@ -54,11 +54,11 @@ class DumpToFile(VideoSupplier):
             import zipfile
             import yaml
             if self.output is None:
-                with self.l: #Double check to make sure file was not created in the meantime
+                with self.l:  #Double check to make sure file was not created in the meantime
                     if self.output is None:
                         self.output = zipfile.ZipFile(self.outputfile, mode="w", compression=zipfile.ZIP_STORED)
                         self.keyframes = self.opts.get('keyframes', 1)
-                        info = {'keyframes':self.keyframes}
+                        info = {'keyframes': self.keyframes}
                         self.output.writestr("info.yaml", yaml.dump(info))
             img_name = "{:06d}.png".format(index)
             encode_param = [int(cv2.IMWRITE_PNG_COMPRESSION), 9]
@@ -67,14 +67,16 @@ class DumpToFile(VideoSupplier):
                 out_data = np.copy(out_data)
                 out_data -= self.inputs[0].read(index=(index // self.keyframes) * self.keyframes)
                 out_data += 127
-            png_encoded = cv2.imencode('.png', cv2.cvtColor(out_data, cv2.COLOR_RGB2BGR) if out_data.shape[2] == 3 else out_data, encode_param)[1].tostring()
+            png_encoded = \
+            cv2.imencode('.png', cv2.cvtColor(out_data, cv2.COLOR_RGB2BGR) if out_data.shape[2] == 3 else out_data,
+                         encode_param)[1].tostring()
             with self.l:
                 self.output.writestr(img_name, png_encoded)
         elif self.type == "ffmpeg_movie":
             import subprocess as sp
             import os
             if self.pipe is None:
-                encoder = self.opts.get('encoder','libx264')
+                encoder = self.opts.get('encoder', 'libx264')
                 if encoder is None:
                     encoder = 'hevc_nvenc'
                 if encoder == 'hevc_nvenc':
@@ -161,11 +163,10 @@ class MarkBorder(VideoSupplier):
         border = xp.zeros_like(image, dtype=bool)
         masked = image > 128
         for i in range(2):
-            for dir in (-1,1):
+            for dir in (-1, 1):
                 xp.logical_or(xp.roll(masked, dir, axis=i), border, out=border)
         xp.logical_and(border, ~masked, out=border)
         return border.astype(np.uint8) * 255
-
 
 
 class Crop(VideoSupplier):
@@ -185,6 +186,36 @@ class Crop(VideoSupplier):
         res = img[self.x: self.x + self.height, self.y: self.y + self.width]
         self.last = (index, res)
         return res
+
+
+def video_functional(functional):
+    return lambda x: Functional([x], functional)
+
+
+class Functional(VideoSupplier):
+    def __init__(self, reader, functional):
+        super().__init__(n_frames=reader[0].n_frames, inputs=reader)
+        self.functional = functional
+
+    def read(self, index, force_type=np):
+        return self.functional(self.inputs[0].read(index=index, force_type=force_type))
+
+
+def to_array(reader):
+    return np.asarray([img for img in reader])
+
+
+def from_array(data):
+    return ArrayReader(data)
+
+
+class ArrayReader(VideoSupplier):
+    def __init__(self, data):
+        super().__init__(len(data), ())
+        self.data = data
+
+    def read(self, index, force_type=np):
+        return VideoSupplier.convert(self.data[index], force_type)
 
 
 class Math(VideoSupplier):
@@ -326,10 +357,12 @@ class PermutateFrames(VideoSupplier):
             case "black":
                 def invalid_black(index):
                     return self.invalid
+
                 self.invalid_action = invalid_black
             case "exception":
                 def invalid_exception(index):
                     return Exception(f"{index} not in range")
+
                 self.invalid_action = invalid_exception
             case _:
                 raise Exception(f"Action {invalid_action} not known")

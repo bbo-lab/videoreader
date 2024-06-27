@@ -18,7 +18,10 @@ class FrameIterator(VideoSupplier):
 
     def run(self):
         if self.jobs != 1:
-            thread_map(lambda index: self.read(index=index, force_type=self.force_type, noreturn=True), self.iterator, max_workers=self.jobs,
+            args = {}
+            if self.jobs != 0:
+                args = {"max_workers": self.jobs}
+            thread_map(lambda index: self.read(index=index, force_type=self.force_type, noreturn=True), self.iterator, **args,
                        chunksize=1)
         else:
             for frame_idx in tqdm(self.iterator):
