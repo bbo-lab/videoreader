@@ -41,9 +41,10 @@ class ImageRange(VideoSupplier):
         if self.imagefile is not None:
             return self.imagefile
         if self.zipfile is not None:
+            frame_name = self.frames[index]
             try:
                 import cv2
-                buf = self.zipfile.read(self.frames[index])
+                buf = self.zipfile.read(frame_name)
                 np_buf = np.frombuffer(buf, np.uint8)
                 res = cv2.imdecode(np_buf, cv2.IMREAD_UNCHANGED)
                 if res.ndim == 3 and res.shape[2] == 3:
