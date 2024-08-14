@@ -45,7 +45,7 @@ class DumpToFile(VideoSupplier):
             if data is not None:
                 self.output.append_data(data)
         elif self.type == "csv":
-            if self.mapkeys == None and isinstance(data, dict):
+            if self.mapkeys is None and isinstance(data, dict):
                 self.mapkeys = data.keys()
                 self.output.write(f"index {' '.join(self.mapkeys)} \n")
             self.output.write(f"{index} {' '.join([str(data[k]) for k in self.mapkeys])} \n")
@@ -96,7 +96,7 @@ class DumpToFile(VideoSupplier):
                 elif encoder == 'dummy':
                     codec = ['null']
                 else:
-                    raise Exception("Encoder " + args.encoder + " not known")
+                    raise Exception("Encoder " + encoder + " not known")
                 pix_fmt = 'rgb24'
                 if data.shape[2] == 1:
                     pix_fmt = 'gray8'
@@ -287,12 +287,12 @@ class MaxIndex(VideoSupplier):
 
 class Plot(VideoSupplier):
     def __init__(self, reader):
-        super().__init__(n_frames=reader.n_frames, input=(reader,))
+        super().__init__(n_frames=reader.n_frames, inputs=(reader,))
 
-    def read(self, index):
+    def read(self, index, force_type=np):
         import cv2
-        img = self.inputs[0].read(index=index)
-        data = self.inputs[1].read(index=index)
+        img = self.inputs[0].read(index=index, force_type=force_type)
+        data = self.inputs[1].read(index=index, force_type=force_type)
         img = np.copy(img)
         cv2.circle(img, (data['x'], data['y']), 2, (255, 0, 0), data['c'])
         return img
@@ -303,9 +303,9 @@ class Scale(VideoSupplier):
         super().__init__(n_frames=reader.n_frames, inputs=(reader,))
         self.scale = scale
 
-    def read(self, index):
+    def read(self, index, force_type=np):
         import cv2
-        img = self.inputs[0].read(index=index)
+        img = self.inputs[0].read(index=index, force_type=force_type)
         resized = cv2.resize(img, (int(img.shape[1] * self.scale), int(img.shape[0] * self.scale)))
         return resized
 
@@ -319,7 +319,6 @@ def read_map(filename, source='from', destination='to', sourceoffset=0, destinat
     res = {}
     import pandas as pd
     csv = pd.read_csv(filename, sep=' ')
-
     def get_variable(csv, index):
         if isinstance(index, str):
             if index.isnumeric():
@@ -336,11 +335,6 @@ def read_map(filename, source='from', destination='to', sourceoffset=0, destinat
     return dict(zip(get_variable(csv, source) + sourceoffset, get_variable(csv, destination) + destinationoffset))
 
 
-class TimeToFrame(VideoSupplier):
-    def __init__(self, reader, timingfile):
-        import pandas as pd
-        timings = pd.read_csv(timingfile)
-
 
 class PermutateFrames(VideoSupplier):
     def __init__(self, reader, permutation=None, mapping=None, source='from', destination='to', sourceoffset=0,
@@ -353,7 +347,7 @@ class PermutateFrames(VideoSupplier):
             permutation = np.arange(destinationoffset, len(reader)) - sourceoffset
         self.permutation = permutation
 
-        match (invalid_action):
+        match invalid_action:
             case "black":
                 def invalid_black(index):
                     return self.invalid
@@ -369,6 +363,7 @@ class PermutateFrames(VideoSupplier):
 
         self.invalid = np.zeros_like(reader.read(index=0))
         if isinstance(self.permutation, dict):
+            n_frames = 0
             for frame in sorted(self.permutation.keys()):
                 if self.permutation[frame] >= len(reader):
                     break
