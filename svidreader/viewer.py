@@ -2,6 +2,8 @@ from svidreader.video_supplier import VideoSupplier
 import threading
 
 import numpy as np
+import logging
+logger = logging.getLogger(__name__)
 
 class MatplotlibViewer(VideoSupplier):
     def __init__(self, reader, cmap=None, backend="qt", gui_callback = None):
@@ -191,8 +193,8 @@ class MatplotlibViewer(VideoSupplier):
                            '-video_size', str(img.shape[1]) + 'x' + str(img.shape[0]),  # size of one frame
                            '-pixel_format', 'rgb24' if img.shape[2] >= 2 else 'gray8',
                            '-framerate', '200',
-                           '-i','-']
-                print(command)
+                           '-i', '-']
+                logger.log(logging.DEBUG, command)
                 self.pipe = sp.Popen(command, stdin=sp.PIPE, stderr=sp.STDOUT, bufsize=1000, preexec_fn=os.setpgrp)
             if img.shape[2] == 2:
                 img = np.dstack((img[:,:,0],img[:,:,1],img[:,:,1]))
@@ -230,6 +232,7 @@ class MatplotlibViewer(VideoSupplier):
         super().close()
         if self.pipe is not None:
             self.pipe.stdin.close()
+            self.pipe.kill()
         if self.exit_event is not None:
             self.exit_event.set()
             self.trigger_worker.set()

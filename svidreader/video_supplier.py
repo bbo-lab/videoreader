@@ -15,6 +15,7 @@ class VideoSupplier:
         self.n_frames = n_frames
         self.shape = None
         self.default_array_module = np
+        self.is_alive = True
 
     def __iter__(self):
         return VideoIterator(reader=self)
@@ -38,8 +39,10 @@ class VideoSupplier:
         return self.read(key, self.default_array_module)
 
     def close(self):
-        for input in self.inputs:
-            input.close()
+        if self.is_alive:
+            self.is_alive = False
+            for input in self.inputs:
+                input.close()
 
     def get_key_indices(self):
         return self.inputs[0].get_key_indices()
