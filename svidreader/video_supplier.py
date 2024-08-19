@@ -5,9 +5,11 @@ from enum import Enum
 
 logger = logging.getLogger(__name__)
 
+
 class ARRAY_MODULE_BEHAVIOR(Enum):
     DEFAULT = 0
     NATIVE = 1
+
 
 class VideoSupplier:
     def __init__(self, n_frames, inputs=()):
@@ -38,11 +40,13 @@ class VideoSupplier:
     def __getitem__(self, key):
         return self.read(key, self.default_array_module)
 
-    def close(self):
+    def close(self, recursive=False):
         if self.is_alive:
             self.is_alive = False
-            for input in self.inputs:
-                input.close()
+            if recursive:
+                for input in self.inputs:
+                    input.close()
+        self.inputs = None
 
     def get_key_indices(self):
         return self.inputs[0].get_key_indices()
@@ -54,7 +58,7 @@ class VideoSupplier:
 
     def get_offset(self):
         if len(self.inputs[0]) == 0:
-            return (0,0)
+            return (0, 0)
         return self.inputs[0].get_offset()
 
     def get_meta_data(self):
@@ -83,14 +87,16 @@ class VideoSupplier:
             return img
         if logging.DEBUG >= logging.root.level:
             finfo = inspect.getouterframes(inspect.currentframe())[1]
-            logger.log(logging.DEBUG, F'convert {t.__module__} to {module.__name__} by {finfo.filename} line {finfo.lineno}')
+            logger.log(logging.DEBUG,
+                       F'convert {t.__module__} to {module.__name__} by {finfo.filename} line {finfo.lineno}')
         if t.__module__ == 'cupy':
             return module.array(img.get(), copy=False)
-        return module.array(img,copy=False)
+        return module.array(img, copy=False)
+
 
 class VideoIterator(VideoSupplier):
     def __init__(self, reader):
-        super().__init__(n_frames = reader.n_frames, inputs=(reader,))
+        super().__init__(n_frames=reader.n_frames, inputs=(reader,))
         self.frame_idx = 0
 
     def __next__(self):
