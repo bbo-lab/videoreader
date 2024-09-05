@@ -1,4 +1,3 @@
-import hashlib
 import os
 from svidreader.imagecache import ImageCache
 from svidreader.effects import BgrToGray
@@ -7,7 +6,6 @@ from svidreader.effects import FrameDifference
 from svidreader.effects import Scale
 from svidreader.effects import Crop
 from svidreader.effects import ConstFrame
-from svidreader.effects import DumpToFile
 from svidreader.effects import Arange
 from svidreader.effects import PermutateFrames
 from svidreader.effects import Concatenate
@@ -99,7 +97,6 @@ def unescape(str):
 def get_reader(filename, backend="decord", cache=False, options={}):
     pipe = filename.find("|")
     pipeline = None
-    res = None
     processes = 1
     if pipe >= 0:
         pipeline = filename[pipe + 1:]
@@ -222,6 +219,10 @@ def create_filtergraph_from_string(inputs, pipeline, gui_callback=None, options=
             elif effectname == "const":
                 assert len(curinputs) == 1
                 last = ConstFrame(curinputs[0], frame=int(effect_options.get('frame')))
+            elif effectname == "convert_colorspace":
+                assert len(curinputs) == 1
+                from svidreader.effects import ConvertColorspace
+                last = ConvertColorspace(curinputs[0], source=effect_options.get('source'), destination=effect_options.get('destination'))
             elif effectname == "math":
                 last = Math(curinputs, expression=effect_options.get('exp'), library=effect_options.get('library','numpy'))
             elif effectname == "crop":

@@ -1,11 +1,11 @@
 from svidreader.video_supplier import VideoSupplier
 import multiprocessing
 import numpy as np
+import inspect
 
 
 class DumpToFile(VideoSupplier):
     def __init__(self, reader, outputfile, writer=None, opts={}, makedir=False, comment=None):
-        import imageio
         super().__init__(n_frames=reader.n_frames, inputs=(reader,))
         self.outputfile = outputfile
         self.output = None
@@ -22,6 +22,8 @@ class DumpToFile(VideoSupplier):
             self.outputfile = outputfile
         elif outputfile.endswith('.zip'):
             self.type = "zip"
+        elif outputfile.endswith('.png'):
+            self.type = "png"
         else:
             self.type = "csv"
             self.mapkeys = None
@@ -68,10 +70,14 @@ class DumpToFile(VideoSupplier):
                 out_data -= self.inputs[0].read(index=(index // self.keyframes) * self.keyframes)
                 out_data += 127
             png_encoded = \
-            cv2.imencode('.png', cv2.cvtColor(out_data, cv2.COLOR_RGB2BGR) if out_data.shape[2] == 3 else out_data,
-                         encode_param)[1].tostring()
+                cv2.imencode('.png', cv2.cvtColor(out_data, cv2.COLOR_RGB2BGR) if out_data.shape[2] == 3 else out_data,
+                             encode_param)[1].tostring()
             with self.l:
                 self.output.writestr(img_name, png_encoded)
+        elif self.type == "png":
+            import imageio
+            out_data = VideoSupplier.convert(data, module=np)
+            imageio.v3.imwrite(self.output.format(index), out_data)
         elif self.type == "ffmpeg_movie":
             import subprocess as sp
             import os
@@ -117,6 +123,22 @@ class DumpToFile(VideoSupplier):
                 self.pipe = sp.Popen(command, stdin=sp.PIPE, stderr=sp.STDOUT, bufsize=1000, preexec_fn=os.setpgrp)
             self.pipe.stdin.write(data.tobytes())
         return data
+
+
+class Blur(VideoSupplier):
+    def __init__(self, inputs, weights):
+        super().__init__(n_frames=inputs[0].n_frames, inputs=inputs)
+        self.weights = weights
+
+    def read(self, index, force_type=np):
+        result = None
+        for idx, w in enumerate(self.weights):
+            tmp = w * self.inputs.read(index + idx, force_type=force_type)
+            if result is None:
+                result = tmp
+            else:
+                result += tmp
+        return result
 
 
 class Arange(VideoSupplier):
@@ -169,6 +191,75 @@ class MarkBorder(VideoSupplier):
         return border.astype(np.uint8) * 255
 
 
+class ConvertColorspace(VideoSupplier):
+    def __init__(self, reader, source, destination):
+        super().__init__(n_frames=reader.n_frames, inputs=(reader,))
+        if source == destination:
+            self.functional = lambda x, force_type: x
+        elif source == "rgb" and destination == "hsv":
+            self.functional = lambda x, force_type: ConvertColorspace.rgb2hsv(x, force_type)
+        elif source == "hsv" and destination == "rgb":
+            self.functional = lambda x, force_type: ConvertColorspace.hsv2rgb(x, force_type)
+        else:
+            raise Exception(f"Conversion from {source} to {destination} not implemented")
+
+    def read(self, index, force_type=np):
+        return self.functional(self.inputs[0].read(index, force_type=force_type), force_type=force_type)
+
+    @staticmethod
+    def rgb2hsv(rgb, xp):
+        """ convert RGB to HSV color space
+
+        :param rgb: np.ndarray
+        :return: np.ndarray
+        """
+
+        rgb = rgb.astype(xp.float32)
+        maxv = xp.amax(rgb, axis=2)
+        maxc = xp.argmax(rgb, axis=2)
+        minv = xp.amin(rgb, axis=2)
+        minc = xp.argmin(rgb, axis=2)
+
+        hsv = xp.zeros(rgb.shape, dtype=xp.uint8)
+        hsv[maxc == minc, 0] = xp.zeros(hsv[maxc == minc, 0].shape)
+        hsv[maxc == 0, 0] = (((rgb[..., 1] - rgb[..., 2]) * 60.0 / (maxv - minv + xp.spacing(1))) % 360.0)[
+            maxc == 0]
+        hsv[maxc == 1, 0] = (((rgb[..., 2] - rgb[..., 0]) * 60.0 / (maxv - minv + xp.spacing(1))) + 120.0)[
+            maxc == 1]
+        hsv[maxc == 2, 0] = (((rgb[..., 0] - rgb[..., 1]) * 60.0 / (maxv - minv + xp.spacing(1))) + 240.0)[
+            maxc == 2]
+        hsv[maxv == 0, 1] = xp.zeros(hsv[maxv == 0, 1].shape)
+        hsv[maxv != 0, 1] = (1 - minv / (maxv + xp.spacing(1)))[maxv != 0]
+        hsv[..., 2] = maxv
+        return hsv
+
+    @staticmethod
+    def hsv2rgb(hsv, xp):
+        """ convert HSV to RGB color space
+
+        :param hsv: np.ndarray
+        :return: np.ndarray
+        """
+
+        hi = xp.floor(hsv[..., 0] / 60.0) % 6
+        hi = hi.astype(xp.uint8)
+        v = hsv[..., 2].astype(xp.float32)
+        f = (hsv[..., 0] / 60.0) - xp.floor(hsv[..., 0] / 60.0)
+        p = v * (1.0 - hsv[..., 1])
+        q = v * (1.0 - (f * hsv[..., 1]))
+        t = v * (1.0 - ((1.0 - f) * hsv[..., 1]))
+
+        rgb = xp.zeros(hsv.shape, dtype=xp.uint8)
+        rgb[hi == 0, :] = xp.dstack((v, t, p))[hi == 0, :]
+        rgb[hi == 1, :] = xp.dstack((q, v, p))[hi == 1, :]
+        rgb[hi == 2, :] = xp.dstack((p, v, t))[hi == 2, :]
+        rgb[hi == 3, :] = xp.dstack((p, q, v))[hi == 3, :]
+        rgb[hi == 4, :] = xp.dstack((t, p, v))[hi == 4, :]
+        rgb[hi == 5, :] = xp.dstack((v, p, q))[hi == 5, :]
+
+        return rgb
+
+
 class Crop(VideoSupplier):
     def __init__(self, reader, x=0, y=0, width=-1, height=-1):
         super().__init__(n_frames=reader.n_frames, inputs=(reader,))
@@ -196,9 +287,17 @@ class Functional(VideoSupplier):
     def __init__(self, reader, functional):
         super().__init__(n_frames=reader[0].n_frames, inputs=reader)
         self.functional = functional
+        arguments = inspect.getfullargspec(functional)
+        self.add_index = 'index' in arguments.args
+        self.add_force_type = 'force_type' in arguments.args
 
     def read(self, index, force_type=np):
-        return self.functional(self.inputs[0].read(index=index, force_type=force_type))
+        args = {}
+        if self.add_index:
+            args['index'] = index
+        if self.add_force_type:
+            args['force_type'] = force_type
+        return self.functional(self.inputs[0].read(index=index, force_type=force_type), **args)
 
 
 def to_array(reader):
@@ -319,6 +418,7 @@ def read_map(filename, source='from', destination='to', sourceoffset=0, destinat
     res = {}
     import pandas as pd
     csv = pd.read_csv(filename, sep=' ')
+
     def get_variable(csv, index):
         if isinstance(index, str):
             if index.isnumeric():
@@ -333,7 +433,6 @@ def read_map(filename, source='from', destination='to', sourceoffset=0, destinat
             return np.asarray(csv[index])
 
     return dict(zip(get_variable(csv, source) + sourceoffset, get_variable(csv, destination) + destinationoffset))
-
 
 
 class PermutateFrames(VideoSupplier):

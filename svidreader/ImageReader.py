@@ -4,6 +4,7 @@ from svidreader.video_supplier import VideoSupplier
 import os
 import zipfile
 import yaml
+from threading import Lock
 
 
 class ImageRange(VideoSupplier):
@@ -12,6 +13,7 @@ class ImageRange(VideoSupplier):
         self.keyframe = keyframe
         self.zipfile = None
         self.imagefile = None
+        self.mutex = Lock()
         if os.path.isfile(folder_file) and folder_file.endswith('.zip'):
             try:
                 self.folder_file = folder_file
@@ -44,7 +46,8 @@ class ImageRange(VideoSupplier):
             frame_name = self.frames[index]
             try:
                 import cv2
-                buf = self.zipfile.read(frame_name)
+                with self.mutex:
+                    buf = self.zipfile.read(frame_name)
                 np_buf = np.frombuffer(buf, np.uint8)
                 res = cv2.imdecode(np_buf, cv2.IMREAD_UNCHANGED)
                 if res.ndim == 3 and res.shape[2] == 3:
