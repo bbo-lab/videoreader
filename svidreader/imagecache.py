@@ -7,8 +7,11 @@ import sys
 from enum import IntEnum
 from multiprocessing.pool import ThreadPool
 import numpy as np
-from svidreader.video_supplier import VideoSupplier
 import logging
+from svidreader.video_supplier import VideoSupplier
+
+logger = logging.getLogger(__name__)
+
 
 #This class acts as a cache-proxy to access a the-imageio-reader.
 #Options are tuned to read compressed videos.
@@ -26,8 +29,9 @@ class CachedFrame:
             return self.data.nbytes
         return sys.getsizeof(self.data)
 
+
 class QueuedLoad():
-    def __init__(self, task, priority = 0, future = None):
+    def __init__(self, task, priority=0, future=None):
         self.priority = priority
         self.task = task
         self.future = future
@@ -40,27 +44,28 @@ class QueuedLoad():
 
     def __lt__(self, other):
         return self.priority < other.priority
- 
+
     def __le__(self, other):
         return self.priority <= other.priority
 
     def __gt__(self, other):
         return self.priority > other.priority
- 
+
     def __ge__(self, other):
         return self.priority >= other.priority
 
 
 class PriorityThreadPool(ThreadPool):
     def __init__(self, processes=1):
-        super().__init__(processes = processes)
+        super().__init__(processes=processes)
         self.loadingQueue = queue.PriorityQueue()
 
     def close(self):
-        pass
+        super().close()
+        self.loadingQueue = None
 
-    def submit(self,task, priority=0, future = Future()):
-        self.loadingQueue.put(QueuedLoad(task, priority = priority, future = future))
+    def submit(self, task, priority=0, future=Future()):
+        self.loadingQueue.put(QueuedLoad(task, priority=priority, future=future))
         self.apply_async(self.worker)
         return future
 
@@ -72,9 +77,8 @@ class PriorityThreadPool(ThreadPool):
                 elem.future.set_result(res)
             except Exception as e:
                 elem.future.set_exception(e)
-        except:
-            print("timeout")
-            pass
+        except Exception as e:
+            logger.log(logging.ERROR, f"timeout {e}")
 
 
 class FrameStatus(IntEnum):
@@ -84,11 +88,12 @@ class FrameStatus(IntEnum):
     LOADING = 3
     CACHED = 4
 
+
 class ImageCache(VideoSupplier):
-    def __init__(self, reader, keyframes = None, maxcount = 100, processes=1, preload=20, connect_segments=None):
+    def __init__(self, reader, keyframes=None, maxcount=100, processes=1, preload=20, connect_segments=None):
         super().__init__(n_frames=reader.n_frames, inputs=(reader,))
         if self.n_frames > 0:
-            self.framestatus = np.full(shape=(self.n_frames,),dtype=np.uint8,fill_value=FrameStatus.NOT_CACHED)
+            self.framestatus = np.full(shape=(self.n_frames,), dtype=np.uint8, fill_value=FrameStatus.NOT_CACHED)
         else:
             self.framestatus = {}
         self.verbose = True
@@ -106,11 +111,10 @@ class ImageCache(VideoSupplier):
         self.keyframes = keyframes if keyframes is not None else reader.get_key_indices()
         self.ptp = PriorityThreadPool(processes=processes)
 
-
-    def close(self):
+    def close(self, recursive=False):
         self.ptp.close()
-        super().close()
-
+        self.ptp = None
+        super().close(recursive=recursive)
 
     def add_to_cache(self, index, data, hash):
         res = self.cached.get(index)
@@ -127,11 +131,10 @@ class ImageCache(VideoSupplier):
         self.usage_counter += 1
         return res
 
-
     def clean(self):
         if len(self.cached) > self.maxcount or self.curmemsize > self.maxmemsize:
-            last_used = np.zeros(len(self.cached),dtype=int)
-            keys = np.zeros(len(self.cached),dtype=int)
+            last_used = np.zeros(len(self.cached), dtype=int)
+            keys = np.zeros(len(self.cached), dtype=int)
             i = 0
             for k, v in self.cached.items():
                 keys[i] = k
@@ -141,17 +144,16 @@ class ImageCache(VideoSupplier):
                 partition = np.argpartition(last_used, self.maxcount)
                 oldmemsize = self.curmemsize
                 oldsize = len(last_used)
-                for p in partition[:max(0,len(last_used) - self.maxcount * 3 // 4)]:
+                for p in partition[:max(0, len(last_used) - self.maxcount * 3 // 4)]:
                     k = keys[p]
                     self.curmemsize -= self.cached[k].memsize()
                     self.framestatus[k] = FrameStatus.NOT_CACHED
                     del self.cached[k]
                 #print("cleaned", oldsize - len(self.cached),"of", oldsize, "freed",(oldmemsize - self.curmemsize)//1024//1024,"MB of",oldmemsize//1024//1024,"MB")
             except Exception as e:
-                print(e)
+                logger.log(logging.ERROR, e)
 
-
-    def read_impl(self,index, force_type=None):
+    def read_impl(self, index, force_type=None):
         while self.framestatus[index] == FrameStatus.LOADING:
             pass
         with self.lock:
@@ -174,7 +176,7 @@ class ImageCache(VideoSupplier):
                     self.add_to_cache(i, data, 1 * 7 + index)
             self.last_read = index - 1
         elif self.last_read + 1 != index:
-            logging.debug(f'nonsequential read {self.last_read} to {index}')
+            logger.log(logging.DEBUG, f'nonsequential read {self.last_read} to {index}')
         with self.lock:
             self.framestatus[index] = FrameStatus.LOADING
         data = self.inputs[0].read(index=index, force_type=force_type)
@@ -184,8 +186,7 @@ class ImageCache(VideoSupplier):
             self.clean()
             return res
 
-
-    def load(self, index, lazy = False, force_type=None):
+    def load(self, index, lazy=False, force_type=None):
         if lazy:
             if self.framestatus[index] > FrameStatus.NOT_CACHED:
                 return
@@ -198,15 +199,13 @@ class ImageCache(VideoSupplier):
         future = Future()
         return self.ptp.submit(lambda: self.read_impl(index, force_type=force_type), priority=priority, future=future)
 
-
     def get_result_from_future(self, future):
         res = future.result()
         res.last_used = self.usage_counter
         self.usage_counter += 1
         return res.data
 
-
-    def read(self,index=None,blocking=True, force_type=np):
+    def read(self, index=None, blocking=True, force_type=np):
         if index >= self.n_frames:
             raise Exception('Out of bounds, frame ' + str(index) + ' of ' + str(self.n_frames) + 'requested')
         with self.lock:
@@ -218,7 +217,7 @@ class ImageCache(VideoSupplier):
             end = min(index + self.num_preload_fwd, self.n_frames - 1)
         begin = max(index - self.num_preload_bwd, 0)
         if self.keyframes is not None:
-            right_idx = self.keyframes.searchsorted(index,'right')-1
+            right_idx = self.keyframes.searchsorted(index, 'right') - 1
             begin = 0 if right_idx == 0 else self.keyframes[right_idx]
             begin = max(begin, index - self.maxcount // 2)
         for i in range(begin, end):
@@ -230,6 +229,5 @@ class ImageCache(VideoSupplier):
         if blocking:
             res = self.get_result_from_future(future)
             return VideoSupplier.convert(res, force_type)
-        future.add_done_callback(lambda : self.get_result_from_future(future))
+        future.add_done_callback(lambda: self.get_result_from_future(future))
         return future
-

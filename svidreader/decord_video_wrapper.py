@@ -33,9 +33,9 @@ class DecordVideoReader(VideoSupplier):
     def get_key_indices(self):
         return np.asarray(self.vr.get_key_indices(),dtype=int)
 
-    def close(self):
+    def close(self, recursive=False):
         self.closed = True
-        super().close()
+        super().close(recursive=recursive)
 
     def read(self, index, force_type=np):
         with self.mutex:

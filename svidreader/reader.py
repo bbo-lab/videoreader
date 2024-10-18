@@ -68,7 +68,7 @@ class SVidReader(VideoSupplier):
     def __del__(self):
         self.close()
 
-    def close(self):
+    def close(self, recursive=False):
         self.reader.close()
 
     def get_data(self, fr_idx):

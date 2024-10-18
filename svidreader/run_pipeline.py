@@ -17,10 +17,8 @@ class GuiApplication:
         self.app = None
 
     def gui_worker(self):
-        print("gui_working")
         while True:
             tmp = self.q.get(block=True)
-            print('tmp', tmp)
             if tmp is None:
                 break
             if tmp == "runqt":
@@ -34,7 +32,6 @@ class GuiApplication:
     def run(self):
         def exec_qt():
             if self.app is not None:
-                print("exec")
                 self.app.exec()
                 sys.exit()
             else:
@@ -123,7 +120,8 @@ def main():
             outputfile.close()
     if ga.app is not None:
         ga.app.quit()
-    out.close()
+    out.close(recursive=True)
+    out = None
 
 
 if __name__ == '__main__':

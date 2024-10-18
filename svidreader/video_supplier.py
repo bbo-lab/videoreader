@@ -45,7 +45,7 @@ class VideoSupplier:
             self.is_alive = False
             if recursive:
                 for input in self.inputs:
-                    input.close()
+                    input.close(recursive=recursive)
         self.inputs = None
 
     def get_key_indices(self):
@@ -58,7 +58,7 @@ class VideoSupplier:
 
     def get_offset(self):
         if len(self.inputs[0]) == 0:
-            return (0, 0)
+            return 0, 0
         return self.inputs[0].get_offset()
 
     def get_meta_data(self):
@@ -92,6 +92,18 @@ class VideoSupplier:
         if t.__module__ == 'cupy':
             return module.array(img.get(), copy=False)
         return module.array(img, copy=False)
+
+
+    @staticmethod
+    def get_array_module(name):
+        match name:
+            case "cupy":
+                import cupy as xp
+            case "numpy":
+                import numpy as xp
+            case _:
+                raise Exception(f"{name} must be one of (cupy, numpy)")
+        return xp
 
 
 class VideoIterator(VideoSupplier):
