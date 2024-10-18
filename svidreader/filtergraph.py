@@ -1,6 +1,6 @@
 import os
 from svidreader.imagecache import ImageCache
-from svidreader.effects import BgrToGray
+from svidreader.effects import BgrToGray, PixelCorrection
 from svidreader.effects import GrayToBgr
 from svidreader.effects import FrameDifference
 from svidreader.effects import Scale
@@ -13,6 +13,7 @@ from svidreader.effects import DumpToFile
 from svidreader.effects import Math
 from svidreader.effects import MaxIndex
 from svidreader.effects import ChangeFramerate
+
 
 def find_ignore_escaped(str, tofind):
     single_quotes = False
@@ -90,11 +91,13 @@ def unescape(str):
         if char == '"':
             double_quotes = True
             continue
-        result +=char
-    return  result
+        result += char
+    return result
 
 
-def get_reader(filename, backend="decord", cache=False, options={}):
+def get_reader(filename, backend="decord", cache=False, options=None):
+    if options is None:
+        options = {}
     pipe = filename.find("|")
     pipeline = None
     processes = 1
@@ -124,28 +127,28 @@ def get_reader(filename, backend="decord", cache=False, options={}):
 def create_filtergraph_from_string(inputs, pipeline, gui_callback=None, options={}):
     filtergraph = {}
     for i in range(len(inputs)):
-        filtergraph["input_"+str(i)] = inputs[i]
+        filtergraph["input_" + str(i)] = inputs[i]
     sp = pipeline.split(';')
-    last = inputs[-1] if len(inputs) != 0 else None
+    last = inputs
     for line in sp:
         try:
             curinputs = []
             while True:
                 line = line.strip()
-                if line[0]!='[':
+                if line[0] != '[':
                     break
-                br_close= line.find(']')
+                br_close = line.find(']')
                 curinputs.append(filtergraph[line[1:br_close]])
                 line = line[br_close + 1:len(line)]
             noinput = len(curinputs) == 0
             if noinput and last is not None:
-                curinputs.append(last)
+                curinputs.extend(last if isinstance(last, list) else [last])
             curoutputs = []
             while True:
                 line = line.strip()
-                if line[len(line) -1]!=']':
+                if line[len(line) - 1] != ']':
                     break
-                br_open= line.rfind('[')
+                br_open = line.rfind('[')
                 curoutputs.append(line[br_open + 1:len(line) - 1])
                 line = line[0:br_open]
             line = line.strip()
@@ -154,7 +157,7 @@ def create_filtergraph_from_string(inputs, pipeline, gui_callback=None, options=
             if eqindex != -1:
                 effectname = line[0:eqindex]
                 line = line[eqindex + 1:len(line)]
-            line = split_ignore_escaped(line,':')
+            line = split_ignore_escaped(line, ':')
             effect_options = options.copy()
             for opt in line:
                 eqindex = find_ignore_escaped(opt, '=')
@@ -164,7 +167,9 @@ def create_filtergraph_from_string(inputs, pipeline, gui_callback=None, options=
                     effect_options[opt[0:eqindex]] = unescape(opt[eqindex + 1:len(opt)])
             if effectname == 'cache':
                 assert len(curinputs) == 1
-                last = ImageCache(curinputs[0], maxcount=effect_options.get('cmax',1000), processes=effect_options.get('num_threads',1), preload=effect_options.get('preload',20))
+                last = ImageCache(curinputs[0], maxcount=effect_options.get('cmax', 1000),
+                                  processes=effect_options.get('num_threads', 1),
+                                  preload=effect_options.get('preload', 20))
             elif effectname == 'minicache':
                 assert len(curinputs) == 1
                 last = ImageCache(curinputs[0], maxcount=effect_options.get('cmax', 5),
@@ -173,6 +178,9 @@ def create_filtergraph_from_string(inputs, pipeline, gui_callback=None, options=
             elif effectname == 'bgr2gray':
                 assert len(curinputs) == 1
                 last = BgrToGray(curinputs[0])
+            elif effectname == 'pixel_correction':
+                assert len(curinputs) == 1
+                last = PixelCorrection(curinputs[0])
             elif effectname == 'gray2bgr':
                 assert len(curinputs) == 1
                 last = GrayToBgr(curinputs[0])
@@ -191,8 +199,8 @@ def create_filtergraph_from_string(inputs, pipeline, gui_callback=None, options=
                 last = PermutateFrames(reader=curinputs[0],
                                        permutation=effect_options.get('input', None),
                                        mapping=effect_options.get('map', None),
-                                       source=effect_options.get('source','from'),
-                                       destination=effect_options.get('destination','to'),
+                                       source=effect_options.get('source', 'from'),
+                                       destination=effect_options.get('destination', 'to'),
                                        sourceoffset=int(effect_options.get('sourceoffset', 0)),
                                        destinationoffset=int(effect_options.get('destinationoffset', 0)))
             elif effectname == "analyze":
@@ -202,14 +210,16 @@ def create_filtergraph_from_string(inputs, pipeline, gui_callback=None, options=
             elif effectname == "majority":
                 assert len(curinputs) == 1
                 from svidreader.majorityvote import MajorityVote
-                last = MajorityVote(curinputs[0],  window=int(effect_options.get('window', 10)), scale=float(effect_options.get('scale', 1)), foreground='foreground' in effect_options)
+                last = MajorityVote(curinputs[0], window=int(effect_options.get('window', 10)),
+                                    scale=float(effect_options.get('scale', 1)),
+                                    foreground='foreground' in effect_options)
             elif effectname == "change_framerate":
                 assert len(curinputs) == 1
                 last = ChangeFramerate(curinputs[0], factor=float(effect_options.get('factor')))
             elif effectname == "light_detector":
                 assert len(curinputs) == 1
                 from svidreader.light_detector import LightDetector
-                last = LightDetector(curinputs[0], mode=effect_options.get('mode','blinking'))
+                last = LightDetector(curinputs[0], mode=effect_options.get('mode', 'blinking'))
             elif effectname == "normalized_contrast":
                 from svidreader.mask_unfocused import NormalizedContrast
                 last = NormalizedContrast(curinputs[0])
@@ -222,9 +232,11 @@ def create_filtergraph_from_string(inputs, pipeline, gui_callback=None, options=
             elif effectname == "convert_colorspace":
                 assert len(curinputs) == 1
                 from svidreader.effects import ConvertColorspace
-                last = ConvertColorspace(curinputs[0], source=effect_options.get('source'), destination=effect_options.get('destination'))
+                last = ConvertColorspace(curinputs[0], source=effect_options.get('source'),
+                                         destination=effect_options.get('destination'))
             elif effectname == "math":
-                last = Math(curinputs, expression=effect_options.get('exp'), library=effect_options.get('library','numpy'))
+                last = Math(curinputs, expression=effect_options.get('exp'),
+                            library=effect_options.get('library', 'numpy'))
             elif effectname == "crop":
                 assert len(curinputs) == 1
                 w = -1
@@ -242,7 +254,7 @@ def create_filtergraph_from_string(inputs, pipeline, gui_callback=None, options=
                     y = int(sp[1])
                     w = int(sp[2])
                     h = int(sp[3])
-                last = Crop(curinputs[0], x = x, y = y, width = w, height=h)
+                last = Crop(curinputs[0], x=x, y=y, width=w, height=h)
             elif effectname == "perprojection":
                 assert len(curinputs) == 1
                 from svidreader.cameraprojection import PerspectiveCameraProjection
@@ -257,16 +269,20 @@ def create_filtergraph_from_string(inputs, pipeline, gui_callback=None, options=
                 last = VideoScraper(curinputs[0], tokens=effect_options['tokens'])
             elif effectname == "argmax":
                 assert len(curinputs) == 1
-                last = MaxIndex(curinputs[0], count=effect_options.get('count',1), radius=effect_options.get('radius',1))
+                last = MaxIndex(curinputs[0], count=effect_options.get('count', 1),
+                                radius=effect_options.get('radius', 1))
             elif effectname == "viewer":
                 assert len(curinputs) == 1
                 from svidreader.viewer import MatplotlibViewer
-                last = MatplotlibViewer(curinputs[0], backend=effect_options.get('backend','matplotlib'), gui_callback=gui_callback)
+                last = MatplotlibViewer(curinputs[0], backend=effect_options.get('backend', 'matplotlib'),
+                                        gui_callback=gui_callback)
             elif effectname == "dump":
                 assert len(curinputs) == 1
-                last = DumpToFile(reader=curinputs[0], outputfile=effect_options['output'], writer=effect_options.get('writer', None), opts=effect_options, makedir='mkdir' in effect_options, comment=effect_options.get('comment',None))
+                last = DumpToFile(reader=curinputs[0], outputfile=effect_options['output'],
+                                  writer=effect_options.get('writer', None), opts=effect_options,
+                                  makedir='mkdir' in effect_options, comment=effect_options.get('comment', None))
             elif effectname == "arange":
-                last = Arange(inputs=curinputs, ncols=int(effect_options.get('ncols','-1')))
+                last = Arange(inputs=curinputs, ncols=int(effect_options.get('ncols', '-1')))
             elif effectname == "concatenate":
                 last = Concatenate(inputs=curinputs)
             elif effectname == "scale":
@@ -279,9 +295,9 @@ def create_filtergraph_from_string(inputs, pipeline, gui_callback=None, options=
                                y=effect_options.get('y', 0))
             else:
                 raise Exception("Effectname " + effectname + " not known")
-            for out in curoutputs:
-                filtergraph[out] = last
+            for idx, out in enumerate(curoutputs):
+                filtergraph[out] = last[idx] if isinstance(last, list) else last
         except Exception as e:
             raise e
-    filtergraph['out'] = last
+    filtergraph['out'] = last[0] if isinstance(last, list) else last
     return filtergraph

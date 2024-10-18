@@ -5,12 +5,13 @@ import inspect
 
 
 class DumpToFile(VideoSupplier):
-    def __init__(self, reader, outputfile, writer=None, opts={}, makedir=False, comment=None):
+    def __init__(self, reader, outputfile, writer=None, opts={}, makedir=False, comment=None, fps=None):
         super().__init__(n_frames=reader.n_frames, inputs=(reader,))
         self.outputfile = outputfile
         self.output = None
         self.l = multiprocessing.Lock()
         self.pipe = None
+        self.fps = fps
         self.opts = opts
         if makedir:
             from pathlib import Path
@@ -31,8 +32,8 @@ class DumpToFile(VideoSupplier):
             if comment is not None:
                 self.output.write(comment + '\n')
 
-    def close(self):
-        super().close()
+    def close(self, recursive=False):
+        super().close(recursive=recursive)
         if self.output is not None:
             self.output.close()
         if self.pipe is not None:
@@ -43,7 +44,7 @@ class DumpToFile(VideoSupplier):
         if self.type == "movie":
             import imageio
             if self.output is None:
-                self.output = imageio.get_writer(self.outputfile, fps=200, quality=8)
+                self.output = imageio.get_writer(self.outputfile, fps=self.fps, quality=8)
             if data is not None:
                 self.output.append_data(data)
         elif self.type == "csv":
@@ -53,6 +54,11 @@ class DumpToFile(VideoSupplier):
             self.output.write(f"{index} {' '.join([str(data[k]) for k in self.mapkeys])} \n")
         elif self.type == "zip":
             import cv2
+            import os
+            for k, v in os.environ.items():
+                if k.startswith("QT_") and "cv2" in v:
+                    del os.environ[k]
+
             import zipfile
             import yaml
             if self.output is None:
@@ -139,6 +145,42 @@ class Blur(VideoSupplier):
             else:
                 result += tmp
         return result
+
+
+class PixelCorrection(VideoSupplier):
+    def __init__(self, reader):
+        super().__init__(n_frames=reader.n_frames, inputs=(reader,))
+        self.cache = {}
+
+    def read(self, index, force_type=np):
+        key_indices = np.copy(self.inputs[0].get_key_indices())
+        nth_keyframe = np.searchsorted(key_indices, index, side="right")
+        xp = force_type
+        res = None
+        firstframe = key_indices[nth_keyframe-1]
+        correction = self.cache.get(firstframe, None)
+        if correction is None:
+            pixel_brightness = None
+            lastframe = key_indices[nth_keyframe]
+            for i in range(firstframe, lastframe):
+                image = self.inputs[0].read(index=i, force_type=force_type)
+                image = image.astype(xp.uint16)
+                if i == index:
+                    res = image
+                neighbours = np.median((xp.roll(image,-1,axis=0),
+                                        xp.roll(image,1,axis=0),
+                                        xp.roll(image,-1,axis=1),
+                                        xp.roll(image,1,axis=1)), axis=0)
+                if pixel_brightness is None:
+                    pixel_brightness = image - neighbours
+                else:
+                    pixel_brightness += image - neighbours
+            correction = pixel_brightness // (lastframe - firstframe)
+            self.cache = {firstframe: correction}
+        else:
+            res = self.inputs[0].read(index, force_type=force_type)
+        res = res -  correction
+        return xp.clip(res, 0, 255).astype(xp.uint8)
 
 
 class Arange(VideoSupplier):
@@ -527,37 +569,40 @@ class FrameDifference(VideoSupplier):
 class Overlay(VideoSupplier):
     def __init__(self, reader, overlay, x=0, y=0):
         super().__init__(n_frames=reader.n_frames, inputs=(reader, overlay))
-        self.x = x
-        self.y = y
-        for var in ['x', 'y']:
-            if isinstance(getattr(self, var), str):
-                val = getattr(self, var)
-                if val.isnumeric():
-                    setattr(self, var, int(val))
-                else:
-                    main_h, main_w, _ = reader.get_shape()
-                    overlay_h, overlay_w, _ = overlay.get_shape()
-                    locals_dict = locals()
-                    for rep_key in ['main_w', 'main_h', 'overlay_w', 'overlay_h']:
-                        val = val.replace(rep_key, str(locals_dict[rep_key]))
-                    setattr(self, var, int(eval(val)))
+        self.x, self.y = x, y
 
         self.overlay_index = lambda index: index
         if reader.n_frames != overlay.n_frames:
             self.overlay_index = lambda index: 0
 
-        self.overlay_mode = 'replace'
-        if reader.get_shape()[2] != overlay.get_shape()[2]:
-            self.overlay_mode = 'bool'
-
     def read(self, index, force_type=np):
         img = self.inputs[0].read(index=index, force_type=force_type)
         overlay = self.inputs[1].read(index=self.overlay_index(index),
                                       force_type=force_type)
-        if self.overlay_mode == 'replace':
-            img[self.y:self.y + overlay.shape[0], self.x:self.x + overlay.shape[1]] = overlay
-        elif self.overlay_mode == 'bool':
+
+        coordinates = [self.x, self.y]
+        for var, val in enumerate(coordinates):
+            if isinstance(val, str):
+                if val.isnumeric():
+                    coordinates[var] = int(val)
+                else:
+                    variables = {'main_w': img.shape[1],
+                                 'main_h': img.shape[0],
+                                 'overlay_w': overlay.shape[1],
+                                 'overlay_h': overlay.shape[0]}
+                    coordinates[var] = int(eval(val, variables))
+        x, y = coordinates
+
+        if overlay.shape[2] == 4:
+            dim = img.shape[2]
+            alpha = overlay[:, :, 3]
+            img[y:y + overlay.shape[0], x:x + overlay.shape[1]] = \
+                ((img[y:y + overlay.shape[0], x:x + overlay.shape[1]] * (255 - alpha)
+                 + overlay[:, :, 0:dim] * alpha)) // 255
+        elif img.shape[2] == overlay.shape[2]:
+            img[y:y + overlay.shape[0], x:x + overlay.shape[1]] = overlay
+        else:
             overlay = overlay < 128
             overlay = np.repeat(overlay, img.shape[2], axis=2)
-            img[self.y:self.y + overlay.shape[0], self.x:self.x + overlay.shape[1]][overlay] = 0
+            img[y:y + overlay.shape[0], x:x + overlay.shape[1]][overlay] = 0
         return img
