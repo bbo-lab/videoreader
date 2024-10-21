@@ -124,7 +124,9 @@ def get_reader(filename, backend="decord", cache=False, options=None):
     return res
 
 
-def create_filtergraph_from_string(inputs, pipeline, gui_callback=None, options={}):
+def create_filtergraph_from_string(inputs, pipeline, gui_callback=None, options=None):
+    if options is None:
+        options = {}
     filtergraph = {}
     for i in range(len(inputs)):
         filtergraph["input_" + str(i)] = inputs[i]
@@ -142,7 +144,7 @@ def create_filtergraph_from_string(inputs, pipeline, gui_callback=None, options=
                 line = line[br_close + 1:len(line)]
             noinput = len(curinputs) == 0
             if noinput and last is not None:
-                curinputs.extend(last if isinstance(last, list) else [last])
+                curinputs.extend(last if (isinstance(last, list) or isinstance(last, tuple)) else [last])
             curoutputs = []
             while True:
                 line = line.strip()
