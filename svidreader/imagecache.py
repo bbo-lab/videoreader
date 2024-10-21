@@ -1,7 +1,5 @@
-import threading
 import queue
 from threading import Lock
-import concurrent.futures
 from concurrent.futures import Future
 import sys
 from enum import IntEnum
@@ -112,8 +110,11 @@ class ImageCache(VideoSupplier):
         self.ptp = PriorityThreadPool(processes=processes)
 
     def close(self, recursive=False):
-        self.ptp.close()
-        self.ptp = None
+        if self.ptp is None:
+            logger.log(logging.ERROR, "closed multiple times")
+        else:
+            self.ptp.close()
+            self.ptp = None
         super().close(recursive=recursive)
 
     def add_to_cache(self, index, data, hash):

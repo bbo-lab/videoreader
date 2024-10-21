@@ -18,6 +18,7 @@ class VideoSupplier:
         self.shape = None
         self.default_array_module = np
         self.is_alive = True
+        self.num_entered = 0
 
     def __iter__(self):
         return VideoIterator(reader=self)
@@ -26,10 +27,18 @@ class VideoSupplier:
         return self.n_frames
 
     def __enter__(self):
+        if self.num_entered == 0:
+            for inp in self.inputs:
+                inp.__enter__()
+        self.num_entered += 1
         return self
 
     def __exit__(self, exc_type, exc_value, traceback):
-        self.close()
+        self.num_entered -= 1
+        if self.num_entered == 0:
+            for inp in self.inputs:
+                inp.__exit__(exc_type, exc_value, traceback)
+            self.close()
 
     def __del__(self):
         self.close()

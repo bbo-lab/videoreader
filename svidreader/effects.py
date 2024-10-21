@@ -161,7 +161,7 @@ class PixelCorrection(VideoSupplier):
         correction = self.cache.get(firstframe, None)
         if correction is None:
             pixel_brightness = None
-            lastframe = key_indices[nth_keyframe]
+            lastframe = key_indices[nth_keyframe] if nth_keyframe < len(key_indices) else len(self.inputs[0])
             for i in range(firstframe, lastframe):
                 image = self.inputs[0].read(index=i, force_type=force_type)
                 image = image.astype(xp.uint16)
