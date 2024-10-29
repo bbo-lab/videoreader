@@ -194,7 +194,7 @@ def create_filtergraph_from_string(inputs, pipeline, gui_callback=None, options=
                 last = get_reader(effect_options['input'], backend=effect_options.get("backend", "iio"), cache=False)
             elif effectname == 'flow':
                 assert len(curinputs) == 1
-                import svidreader.flow as flow
+                import svidreader.filter.flow as flow
                 last = flow.OpticFlow(curinputs[0])
             elif effectname == 'permutate':
                 assert len(curinputs) == 1
