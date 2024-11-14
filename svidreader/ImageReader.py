@@ -45,6 +45,7 @@ class ImageRange(VideoSupplier):
         if self.zipfile is not None:
             frame_name = self.frames[index]
             try:
+                os.environ["OPENCV_IO_ENABLE_OPENEXR"] = "1"
                 import cv2
                 with self.mutex:
                     buf = self.zipfile.read(frame_name)
@@ -77,11 +78,11 @@ class ImageRange(VideoSupplier):
             self.zipfile = None
 
 def is_image(filename):
-    imageEndings = get_imageEndings()
+    imageEndings = get_image_endings()
     for ie in imageEndings:
         if filename.endswith(ie):
             return True
     return False
 
-def get_imageEndings():
+def get_image_endings():
     return ".png", ".exr", ".jpg", ".bmp"

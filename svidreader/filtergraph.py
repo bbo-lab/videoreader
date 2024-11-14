@@ -9,7 +9,6 @@ from svidreader.effects import ConstFrame
 from svidreader.effects import Arange
 from svidreader.effects import PermutateFrames
 from svidreader.effects import Concatenate
-from svidreader.effects import DumpToFile
 from svidreader.effects import Math
 from svidreader.effects import MaxIndex
 from svidreader.effects import ChangeFramerate
@@ -104,8 +103,8 @@ def get_reader(filename, backend="decord", cache=False, options=None):
     if pipe >= 0:
         pipeline = filename[pipe + 1:]
         filename = filename[0:pipe]
-    from svidreader import get_imageEndings
-    if os.path.isdir(filename) or filename.endswith(get_imageEndings()) or filename.endswith('.zip'):
+    from svidreader.ImageReader import get_image_endings
+    if os.path.isdir(filename) or filename.endswith(get_image_endings()) or filename.endswith('.zip'):
         from svidreader import ImageReader
         res = ImageReader.ImageRange(filename)
         processes = 10
@@ -280,6 +279,7 @@ def create_filtergraph_from_string(inputs, pipeline, gui_callback=None, options=
                                         gui_callback=gui_callback)
             elif effectname == "dump":
                 assert len(curinputs) == 1
+                from svidreader.effects import DumpToFile
                 last = DumpToFile(reader=curinputs[0], outputfile=effect_options['output'],
                                   writer=effect_options.get('writer', None), opts=effect_options,
                                   makedir='mkdir' in effect_options, comment=effect_options.get('comment', None))

@@ -76,8 +76,16 @@ class MatplotlibViewer(VideoSupplier):
                 import pyqtgraph as pg
                 import os
                 from PyQt5.QtCore import QTimer
+                self.__enter__()
+                viewer = self
 
-                self.main_window = QWidget()
+                class MainWindow(QWidget):
+                    def closeEvent(self, event):
+                        super().closeEvent(event)
+                        viewer.__exit__(None, None, None)
+
+
+                self.main_window = MainWindow()
                 buttomWidget = QWidget()
                 globalLayout = QVBoxLayout()
                 buttomLayout = QHBoxLayout()
@@ -224,12 +232,11 @@ class MatplotlibViewer(VideoSupplier):
     def submit_slider(self,val):
         self.read(int(val), source=self.slider_frame)
 
-
     def submit_textbox(self,val):
         self.read(int(val), source=self.textbox_frame)
 
-    def close(self):
-        super().close()
+    def close(self, recursive=False):
+        super().close(recursive=recursive)
         if self.pipe is not None:
             self.pipe.stdin.close()
             self.pipe.kill()
