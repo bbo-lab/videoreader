@@ -1,3 +1,4 @@
+import logging
 import os
 from svidreader.imagecache import ImageCache
 from svidreader.effects import BgrToGray, PixelCorrection
@@ -12,6 +13,9 @@ from svidreader.effects import Concatenate
 from svidreader.effects import Math
 from svidreader.effects import MaxIndex
 from svidreader.effects import ChangeFramerate
+
+
+logger = logging.getLogger(__name__)
 
 
 def find_ignore_escaped(str, tofind):
@@ -240,6 +244,7 @@ def create_filtergraph_from_string(inputs, pipeline, gui_callback=None, options=
                             library=effect_options.get('library', 'numpy'))
             elif effectname == "crop":
                 assert len(curinputs) == 1
+                logger.log(logging.WARN, "Signature changed, x and y were swapped")
                 w = -1
                 h = -1
                 x = 0

@@ -188,7 +188,7 @@ class Crop(VideoSupplier):
         if last[0] == index:
             return VideoSupplier.convert(last[1], force_type)
         img = self.inputs[0].read(index=index, force_type=force_type)
-        res = img[self.x: self.x + self.height, self.y: self.y + self.width]
+        res = img[self.y: self.y + self.height, self.x: self.x + self.width]
         self.last = (index, res)
         return res
 
