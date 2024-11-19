@@ -12,8 +12,9 @@ class OpticFlow(VideoSupplier):
 
     def read(self, index, force_type=np):
         import cv2 as cv
-        if self.cache[0] == index:
-            previous = self.cache[1]
+        cache = self.cache
+        if cache[0] == index:
+            previous = cache[1]
         else:
             previous = self.inputs[0].read(index=index, force_type=np)
         current = self.inputs[0].read(index=index+1, force_type=np)
