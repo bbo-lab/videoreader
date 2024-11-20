@@ -23,7 +23,7 @@ def unpack_10bit_to_16bit_fast(packed_data):
     # View the data as a single uint32 array for processing up to 4 bytes (32 bits) at a time
     num_bits = len(byte_array) * 8
     aligned_bits = (num_bits // 10) * 10  # Align bits to multiples of 10
-    packed_bits = np.unpackbits(byte_array, bitorder='big')[:aligned_bits]
+    packed_bits = np.unpackbits(byte_array, bitorder='little')[:aligned_bits]
 
     # Reshape to extract groups of 10 bits
     packed_bits = packed_bits.reshape(-1, 10)
@@ -59,7 +59,7 @@ class ImageRange(VideoSupplier):
                 self.width = 752
                 self.height = 480
                 self.depth = 10
-                self.frames = np.arange(100)
+                self.frames = np.arange(10000)
             elif is_image(folder_file):
                 super().__init__(n_frames=10000000, inputs=())
                 self.imagefile = imageio.v2.imread(folder_file)
@@ -88,7 +88,7 @@ class ImageRange(VideoSupplier):
             self.rawfile.seek(framesize * index)
             chunk = self.rawfile.read(framesize)
             chunk = unpack_10bit_to_16bit_fast(chunk)
-            return chunk.reshape(self.width, self.height, 1)
+            return chunk.reshape(self.height, self.width, 1)
         if self.zipfile is not None:
             frame_name = self.frames[index]
             try:
