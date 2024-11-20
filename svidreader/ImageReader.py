@@ -101,13 +101,14 @@ class ImageRange(VideoSupplier):
                     raise zipfile.BadZipFile(f"Cannot read file {self.folder_file}") from e
             elif folder_file.endswith('.raw'):
                 self.rawfile = open(folder_file, 'rb')
+                filesize = self.rawfile.tell()
                 chunk = self.rawfile.read(64*2**16) #64MB
                 chunk = unpack_10bit_to_16bit_fast(chunk)
                 self.width = probe_width(chunk, 2, 1024)
                 chunk = chunk[:(len(chunk) // self.width) * self.width].reshape(-1, self.width)
                 self.height = probe_height(chunk, self.width // 16, 1024)
                 self.depth = 10
-                self.frames = np.arange(10000)
+                self.frames = np.arange(filesize * 8 // (self.depth * self.width * self.height))
             elif is_image(folder_file):
                 super().__init__(n_frames=10000000, inputs=())
                 self.imagefile = imageio.v2.imread(folder_file)
