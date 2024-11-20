@@ -1,6 +1,4 @@
 import numpy as np
-from IPython.core.display import Video
-
 from svidreader.video_supplier import VideoSupplier
 
 
@@ -18,7 +16,7 @@ class OpticFlow(VideoSupplier):
         else:
             previous = self.inputs[0].read(index=index, force_type=np)
         current = self.inputs[0].read(index=index+1, force_type=np)
-        self.cache = (index, current)
+        self.cache = (index + 1, current)
         flow = np.zeros_like(current,dtype=np.float32,shape=(*current.shape[0:2],2))
         for i in range(current.shape[2]):
             flow += cv.calcOpticalFlowFarneback(previous[:,:,i], current[:,:,i],
