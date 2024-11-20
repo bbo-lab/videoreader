@@ -42,7 +42,6 @@ class DumpToFile(VideoSupplier):
 
     def read(self, index, force_type=np):
         data = self.inputs[0].read(index=index, force_type=force_type)
-        print(f"write image {self.type}")
         if self.type == "movie":
             import imageio
             if self.output is None:

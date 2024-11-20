@@ -17,7 +17,7 @@ jobs:
       - name: Install Videoreader
         run: |
           pip install .
-          pip install decord
+          pip install decord tqdm pyyaml pandas
           pip install imageio[pyav]
           pip install opencv-python
       - name: Test with pytest

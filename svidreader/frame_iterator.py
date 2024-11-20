@@ -12,17 +12,21 @@ class FrameIterator(VideoSupplier):
         self.force_type = force_type
         self.iterator = range(self.n_frames) if iterator is None else iterator
 
-    def read(self, index, force_type=np, noreturn=False):
+    def read(self, index, force_type=np, return_result=True):
         image = self.inputs[0].read(index=index, force_type=force_type)
-        return None if noreturn else image
+        return image if return_result else None
 
-    def run(self):
+    def run(self, return_result=False, show_progress = False):
+        result = [] if return_result else None
         if self.jobs != 1:
             args = {}
             if self.jobs != 0:
                 args = {"max_workers": self.jobs}
-            thread_map(lambda index: self.read(index=index, force_type=self.force_type, noreturn=True), self.iterator, **args,
+            result = thread_map(lambda index: self.read(index=index, force_type=self.force_type, return_result=return_result), self.iterator, **args,
                        chunksize=1)
         else:
-            for frame_idx in tqdm(self.iterator):
-                self.read(frame_idx, force_type=self.force_type)
+            for frame_idx in tqdm(self.iterator, disable=not show_progress):
+                tmp = self.read(frame_idx, force_type=self.force_type, return_result=return_result)
+                if return_result:
+                    result.append(tmp)
+        return result

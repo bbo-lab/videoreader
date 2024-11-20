@@ -214,8 +214,9 @@ class Functional(VideoSupplier):
         return self.functional(self.inputs[0].read(index=index, force_type=force_type), **args)
 
 
-def to_array(reader):
-    return np.asarray([img for img in reader])
+def to_array(reader, jobs=1, show_progress=False):
+    from svidreader import frame_iterator
+    return frame_iterator.FrameIterator(reader, jobs=jobs).run(return_result=True, show_progress=show_progress)
 
 
 def from_array(data):

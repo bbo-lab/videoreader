@@ -108,7 +108,7 @@ def get_reader(filename, backend="decord", cache=False, options=None):
         pipeline = filename[pipe + 1:]
         filename = filename[0:pipe]
     from svidreader.ImageReader import get_image_endings
-    if os.path.isdir(filename) or filename.endswith(get_image_endings()) or filename.endswith('.zip'):
+    if os.path.isdir(filename) or filename.endswith(get_image_endings()) or filename.endswith('.zip') or filename.endswith('.raw'):
         from svidreader import ImageReader
         res = ImageReader.ImageRange(filename)
         processes = 10
@@ -284,7 +284,7 @@ def create_filtergraph_from_string(inputs, pipeline, gui_callback=None, options=
                                         gui_callback=gui_callback)
             elif effectname == "dump":
                 assert len(curinputs) == 1
-                from svidreader.effects import DumpToFile
+                from svidreader.dump_to_file import DumpToFile
                 last = DumpToFile(reader=curinputs[0], outputfile=effect_options['output'],
                                   writer=effect_options.get('writer', None), opts=effect_options,
                                   makedir='mkdir' in effect_options, comment=effect_options.get('comment', None))

@@ -101,14 +101,16 @@ class ImageRange(VideoSupplier):
                     raise zipfile.BadZipFile(f"Cannot read file {self.folder_file}") from e
             elif folder_file.endswith('.raw'):
                 self.rawfile = open(folder_file, 'rb')
-                filesize = self.rawfile.tell()
+                self.rawfile.seek(0, 2)  # Move the cursor to the end of the file
+                file_size = self.rawfile.tell()
+                self.rawfile.seek(0)
                 chunk = self.rawfile.read(64*2**16) #64MB
                 chunk = unpack_10bit_to_16bit_fast(chunk)
                 self.width = probe_width(chunk, 2, 1024)
                 chunk = chunk[:(len(chunk) // self.width) * self.width].reshape(-1, self.width)
                 self.height = probe_height(chunk, self.width // 16, 1024)
                 self.depth = 10
-                self.frames = np.arange(filesize * 8 // (self.depth * self.width * self.height))
+                self.frames = np.arange(file_size * 8 // (self.depth * self.width * self.height))
             elif is_image(folder_file):
                 super().__init__(n_frames=10000000, inputs=())
                 self.imagefile = imageio.v2.imread(folder_file)
@@ -134,8 +136,9 @@ class ImageRange(VideoSupplier):
             return self.imagefile
         if self.rawfile is not None:
             framesize = (self.width * self.height * self.depth) // 8
-            self.rawfile.seek(framesize * index)
-            chunk = self.rawfile.read(framesize)
+            with self.mutex:
+                self.rawfile.seek(framesize * index)
+                chunk = self.rawfile.read(framesize)
             chunk = unpack_10bit_to_16bit_fast(chunk)
             return chunk.reshape(self.height, self.width, 1)
         if self.zipfile is not None:

@@ -1,5 +1,3 @@
-from duplicity.config import force
-
 from svidreader.video_supplier import VideoSupplier
 import numpy as np
 

@@ -6,7 +6,6 @@ import imageio.v2 as iio2
 import numpy as np
 from svidreader.video_supplier import VideoSupplier
 from svidreader.imagecache import ImageCache
-from ccvtools import rawio
 
 
 class SVidReader(VideoSupplier):
