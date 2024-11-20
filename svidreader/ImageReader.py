@@ -7,6 +7,55 @@ import yaml
 from threading import Lock
 
 
+def probe_width(data, min_width=2, max_width=None):
+    """
+    Probes possible widths and finds the one with maximum row similarity.
+
+    Args:
+        data (np.ndarray): 1D array of image data.
+        min_width (int): Minimum width to try.
+        max_width (int): Maximum width to try (default is len(data) // 2).
+
+    Returns:
+        int: Best width with maximum row similarity.
+    """
+    data = data.astype(np.int16)
+    if max_width is None:
+        max_width = len(data) // 2
+
+    similarity = [np.inf] * min_width
+
+    for width in range(min_width, max_width + 1):
+        rows = data[:(len(data) // width) * width].reshape(-1, width)
+        similarity.append(np.mean(np.abs(rows[1:] - rows[:-1])))
+
+    return np.argmin(similarity)
+
+
+def probe_height(data, min_height=2, max_height=None):
+    """
+    Probes possible heights and finds the one with maximum inter-image similarity.
+
+    Args:
+        data (np.ndarray): 1D array of image data.
+        width (int): Width to use when reshaping into images.
+        min_height (int): Minimum height to try.
+        max_height (int): Maximum height to try (default is len(data) // width).
+
+    Returns:
+        int: Best height with maximum inter-image similarity.
+    """
+    data = data.astype(np.int16)
+    max_height = max_height or data.shape[0]
+
+    similarity = [np.inf] * min_height
+
+    for height in range(min_height, max_height + 1):
+        images = data[:(data.shape[0] // height) * height].reshape(-1, height, data.shape[1])
+        similarity.append(np.mean(np.abs(images[1:]-images[:-1])))
+
+    return  np.argmin(similarity)
+
 def unpack_10bit_to_16bit_fast(packed_data):
     """
     Convert packed 10-bit integers to 16-bit integers using NumPy for better performance.
@@ -17,19 +66,15 @@ def unpack_10bit_to_16bit_fast(packed_data):
     Returns:
         np.ndarray: A NumPy array of 16-bit integers.
     """
-    # Convert the packed data into a NumPy array of unsigned 8-bit integers
     byte_array = np.frombuffer(packed_data, dtype=np.uint8)
 
-    # View the data as a single uint32 array for processing up to 4 bytes (32 bits) at a time
     num_bits = len(byte_array) * 8
     aligned_bits = (num_bits // 10) * 10  # Align bits to multiples of 10
     packed_bits = np.unpackbits(byte_array, bitorder='little')[:aligned_bits]
 
-    # Reshape to extract groups of 10 bits
     packed_bits = packed_bits.reshape(-1, 10)
 
-    # Convert groups of bits into integers
-    unpacked = np.packbits(packed_bits, axis=-1).view(np.uint16)
+    unpacked = np.packbits(packed_bits, axis=-1, bitorder='little').view(np.uint16)
 
     return unpacked
 
@@ -56,8 +101,11 @@ class ImageRange(VideoSupplier):
                     raise zipfile.BadZipFile(f"Cannot read file {self.folder_file}") from e
             elif folder_file.endswith('.raw'):
                 self.rawfile = open(folder_file, 'rb')
-                self.width = 752
-                self.height = 480
+                chunk = self.rawfile.read(64*2**16) #64MB
+                chunk = unpack_10bit_to_16bit_fast(chunk)
+                self.width = probe_width(chunk, 2, 1024)
+                chunk = chunk[:(len(chunk) // self.width) * self.width].reshape(-1, self.width)
+                self.height = probe_height(chunk, self.width // 16, 1024)
                 self.depth = 10
                 self.frames = np.arange(10000)
             elif is_image(folder_file):
