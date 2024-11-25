@@ -1,5 +1,8 @@
 import logging
 import os
+
+from pathlib import Path
+
 from svidreader.imagecache import ImageCache
 from svidreader.effects import BgrToGray, PixelCorrection
 from svidreader.effects import GrayToBgr
@@ -99,6 +102,9 @@ def unescape(str):
 
 
 def get_reader(filename, backend="decord", cache=False, options=None):
+    if isinstance(filename, Path):
+        filename = filename.as_posix()
+
     if options is None:
         options = {}
     pipe = filename.find("|")
