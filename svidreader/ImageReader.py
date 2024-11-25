@@ -116,8 +116,10 @@ class ImageRange(VideoSupplier):
                 self.imagefile = imageio.v2.imread(folder_file)
             else:
                 raise Exception(f"File ending of {folder_file} not understood")
-        if os.path.isdir(folder_file):
+        elif os.path.isdir(folder_file):
             files = os.listdir(folder_file)
+        else:
+            raise FileNotFoundError(f"Path {folder_file} does not Exist")
         if files is not None:
             files = np.sort(files)
             for f in files:
