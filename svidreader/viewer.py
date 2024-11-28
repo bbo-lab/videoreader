@@ -6,12 +6,13 @@ import logging
 logger = logging.getLogger(__name__)
 
 class MatplotlibViewer(VideoSupplier):
-    def __init__(self, reader, cmap=None, backend="qt", gui_callback = None):
+    def __init__(self, reader, cmap=None, backend="qt", gui_callback = None, framerate=None):
         super().__init__(n_frames=reader.n_frames, inputs=(reader,))
         self.backend = backend
         self.exit_event = None
         self.trigger_worker = None
         self.updating = False
+        self.framerate = float(framerate) if framerate is not None else None
         self.gui_callback = gui_callback
         if backend == "matplotlib":
             import matplotlib.pyplot as plt
@@ -30,11 +31,13 @@ class MatplotlibViewer(VideoSupplier):
             self.slider_frame = Slider(ax=self.ax_slider_frame,label='',valmin=0,valmax=reader.n_frames - 1,valinit=0)
             self.button_next_frame =  Button(ax=self.ax_button_next_frame, label=">", color='pink', hovercolor='tomato')
             self.textbox_frame = TextBox(ax=self.ax_textbox, label='', initial='0')
+            self.textbox_time = TextBox(ax=self.ax_textbox, label='', initial='0')
 
             self.slider_frame.on_changed(self.submit_slider)
             self.button_previous_frame.on_clicked(self.previous_frame)
             self.button_next_frame.on_clicked(self.next_frame)
-            self.textbox_frame.on_submit(self.submit_textbox)
+            self.textbox_frame.on_submit(self.submit_textbox_frame)
+            self.textbox_time.on_submit(self.submit_textbox_time)
             self.frame = 0
             self.updating = False
             self.th = None
@@ -46,13 +49,15 @@ class MatplotlibViewer(VideoSupplier):
                 if not self.gui_loaded:
                     return
                 self.updating = True
-                self.textbox_frame.setText(str(self.frame))
                 if current_frame is None:
                     current_frame = self.read(self.frame)
                 if source != self.slider_frame:
                     self.slider_frame.setValue(self.frame)
                 if source != self.textbox_frame:
-                    self.textbox_frame.setText(str(self.slider_frame.value()))
+                    self.textbox_frame.setText(str(self.frame))
+                if source != self.textbox_time:
+                    if self.framerate is not None:
+                        self.textbox_time.setText(f"{(self.frame / self.framerate):.2f}")
                 if len(current_frame) == 3 and current_frame.shape[2] == 2:
                     current_frame = np.dstack((current_frame[:,:,0],current_frame[:,:,1],current_frame[:,:,1]))
                 self.img.setImage(np.swapaxes(current_frame, 0, 1),autoLevels=current_frame.dtype!=np.uint8)
@@ -60,9 +65,14 @@ class MatplotlibViewer(VideoSupplier):
 
             self.redraw = redraw
 
-            def submit_frame():
+            def submit_textbox_frame():
                 self.frame = int(self.textbox_frame.text())
                 self.redraw(source=self.textbox_frame)
+
+            def submit_textbox_time():
+                if self.framerate is not None:
+                    self.frame = int(round(float(self.textbox_time.text()) * self.framerate))
+                    self.redraw(source=self.textbox_time)
 
             def submit_slider_frame():
                 self.frame = self.slider_frame.value()
@@ -107,6 +117,7 @@ class MatplotlibViewer(VideoSupplier):
                 self.slider_frame.setMaximum(self.n_frames)
                 self.slider_frame.setValue(0)
                 self.textbox_frame = QLineEdit()
+                self.textbox_time = QLineEdit()
                 self.buttonPlay = (QPushButton("<"), QPushButton("■"), QPushButton(">"))
                 buttonGroupPlay = QButtonGroup()
                 buttonGroupPlay.setExclusive(True)
@@ -133,6 +144,9 @@ class MatplotlibViewer(VideoSupplier):
                 self.slider_frame.valueChanged.connect(submit_slider_frame)
                 self.textbox_frame.setText('0')
                 self.textbox_frame.setMaximumWidth(100)
+                self.textbox_time.setText('0')
+                self.textbox_time.setMaximumWidth(100)
+
                 globalLayout.addWidget(buttomWidget)
                 buttomLayout.addWidget(self.slider_frame)
                 for button in self.buttonPlay:
@@ -165,8 +179,11 @@ class MatplotlibViewer(VideoSupplier):
 
                 buttonGroupPlay.buttonClicked.connect(buttonPlayClicked)
                 buttomLayout.addWidget(self.textbox_frame)
+                if self.framerate is not None:
+                    buttomLayout.addWidget(self.textbox_time)
                 buttomLayout.addWidget(self.comboBoxCopyToClipboard)
-                self.textbox_frame.returnPressed.connect(submit_frame)
+                self.textbox_frame.returnPressed.connect(submit_textbox_frame)
+                self.textbox_time.returnPressed.connect(submit_textbox_time)
                 self.main_window.show()
                 self.gui_loaded = True
             if gui_callback == None:
@@ -217,6 +234,8 @@ class MatplotlibViewer(VideoSupplier):
                     self.slider_frame.set_val(self.frame)
                 if source != self.textbox_frame:
                     self.textbox_frame.set_val(self.frame)
+                if source != self.textbox_time and self.framerate is not None:
+                    self.textbox_time.set_val(f"{(self.frame / self.framerate):.2f}")
                 self.im.set_array(img)
                 self.ax.figure.canvas .draw_idle()
                 self.ax.figure.canvas.flush_events()

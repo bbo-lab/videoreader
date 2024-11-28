@@ -286,7 +286,7 @@ def create_filtergraph_from_string(inputs, pipeline, gui_callback=None, options=
             elif effectname == "viewer":
                 assert len(curinputs) == 1
                 from svidreader.viewer import MatplotlibViewer
-                last = MatplotlibViewer(curinputs[0], backend=effect_options.get('backend', 'matplotlib'),
+                last = MatplotlibViewer(curinputs[0], backend=effect_options.get('backend', 'matplotlib'), framerate=effect_options.get('framerate', None),
                                         gui_callback=gui_callback)
             elif effectname == "dump":
                 assert len(curinputs) == 1
