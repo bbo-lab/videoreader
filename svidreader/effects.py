@@ -193,13 +193,19 @@ class Crop(VideoSupplier):
         return res
 
 
+def video_generator(num_frames):
+    return lambda functional: Functional([], functional, num_frames=num_frames)
+
+
 def video_functional(functional):
     return lambda x: Functional([x], functional)
 
 
 class Functional(VideoSupplier):
-    def __init__(self, reader, functional):
-        super().__init__(n_frames=reader[0].n_frames, inputs=reader)
+    def __init__(self, reader, functional, num_frames=None):
+        if num_frames is None and len(reader) > 0:
+            num_frames = reader[0].n_frames
+        super().__init__(n_frames=num_frames, inputs=reader)
         self.functional = functional
         arguments = inspect.getfullargspec(functional)
         self.add_index = 'index' in arguments.args
@@ -211,12 +217,12 @@ class Functional(VideoSupplier):
             args['index'] = index
         if self.add_force_type:
             args['force_type'] = force_type
-        return self.functional(self.inputs[0].read(index=index, force_type=force_type), **args)
+        return self.functional(*[inp.read(index=index, force_type=force_type) for inp in self.inputs], **args)
 
 
-def to_array(reader, jobs=1, show_progress=False):
+def to_array(reader, jobs=1, show_progress=False, iterator=None):
     from svidreader import frame_iterator
-    return frame_iterator.FrameIterator(reader, jobs=jobs).run(return_result=True, show_progress=show_progress)
+    return frame_iterator.FrameIterator(reader, jobs=jobs, iterator=iterator).run(return_result=True, show_progress=show_progress)
 
 
 def from_array(data):
@@ -318,9 +324,17 @@ class Scale(VideoSupplier):
         self.scale = scale
 
     def read(self, index, force_type=np):
-        import cv2
+        lib = "cv"
         img = self.inputs[0].read(index=index, force_type=force_type)
-        resized = cv2.resize(img, (int(img.shape[1] * self.scale), int(img.shape[0] * self.scale)))
+        output_shape = (int(img.shape[0] * self.scale), int(img.shape[1] * self.scale))
+        if lib == "skimage":
+            from skimage.transform import resize
+            resized = resize(img, output_shape)
+        elif lib == "cv":
+            import cv2
+            resized = cv2.resize(img, output_shape[::-1])
+        else:
+            raise Exception(f"Library {lib} not known")
         return resized
 
 
@@ -357,7 +371,7 @@ class PermutateFrames(VideoSupplier):
             permutation = read_numbers(permutation) + destinationoffset
         elif isinstance(mapping, str):
             permutation = read_map(mapping, source, destination, sourceoffset, destinationoffset)
-        else:
+        elif permutation is None:
             permutation = np.arange(destinationoffset, len(reader)) - sourceoffset
         self.permutation = permutation
 

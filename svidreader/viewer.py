@@ -58,9 +58,21 @@ class MatplotlibViewer(VideoSupplier):
                 if source != self.textbox_time:
                     if self.framerate is not None:
                         self.textbox_time.setText(f"{(self.frame / self.framerate):.2f}")
+
+                if isinstance(current_frame, str):
+                    self.svg_renderer.load(current_frame.encode("utf-8"))
+                    # svg_size = svg_renderer.defaultSize()
+                    self.svg_image.fill(0)  # Transparent background
+                    self.svg_painter.begin(self.svg_image)
+                    self.svg_renderer.render(self.svg_painter)
+                    self.svg_painter.end()
+                    ptr = self.svg_image.bits()
+                    ptr.setsize(self.svg_image.byteCount())
+                    current_frame = np.array(ptr).reshape(self.svg_image.height(), self.svg_image.width(), 4)
                 if len(current_frame) == 3 and current_frame.shape[2] == 2:
                     current_frame = np.dstack((current_frame[:,:,0],current_frame[:,:,1],current_frame[:,:,1]))
                 self.img.setImage(np.swapaxes(current_frame, 0, 1),autoLevels=current_frame.dtype!=np.uint8)
+                self.current_frame = current_frame
                 self.updating = False
 
             self.redraw = redraw
@@ -80,7 +92,10 @@ class MatplotlibViewer(VideoSupplier):
 
             def run_qt():
                 from PyQt5.QtCore import Qt
+                from PyQt5.QtSvg import QSvgWidget
+                from PyQt5 import QtSvg
                 from PyQt5 import QtWidgets
+                from PyQt5.QtGui import QImage, QPainter
                 from PyQt5.QtWidgets import QApplication, QVBoxLayout, QHBoxLayout, QLineEdit, QWidget, QSlider, QComboBox, QPushButton, QButtonGroup
                 from pyqtgraph import PlotWidget, plot
                 import pyqtgraph as pg
@@ -106,9 +121,26 @@ class MatplotlibViewer(VideoSupplier):
 
                 self.updating = True
                 current_frame = self.read(0)
+                if isinstance(current_frame, str):
+                    self.svg_renderer= QtSvg.QSvgRenderer()
+                    self.svg_renderer.load(current_frame.encode("utf-8"))
+                    #svg_size = svg_renderer.defaultSize()
+                    import PyQt5.QtCore
+                    svg_size = PyQt5.QtCore.QSize(2048,2048)
+                    print(svg_size)
+                    self.svg_image = QImage(svg_size, QImage.Format_ARGB32)
+                    self.svg_image.fill(0)  # Transparent background
+                    self.svg_painter = QPainter(self.svg_image)
+                    self.svg_renderer.render(self.svg_painter)
+                    self.svg_painter.end()
+                    ptr = self.svg_image.bits()
+                    ptr.setsize(self.svg_image.byteCount())
+                    current_frame = np.array(ptr).reshape(self.svg_image.height(), self.svg_image.width(), 4)
+
                 if len(current_frame) == 3 and current_frame.shape[2] == 2:
                     current_frame = np.dstack((current_frame[:,:,0],current_frame[:,:,1],current_frame[:,:,1]))
                 self.img = pg.ImageItem(np.swapaxes(current_frame, 0, 1), autoLevels=current_frame.dtype!=np.uint8)
+                self.current_frame = current_frame
                 self.updating = False
                 self.graphWidget.addItem(self.img)
 
@@ -132,7 +164,7 @@ class MatplotlibViewer(VideoSupplier):
                     scene_coords = evt.scenePos()
                     if self.graphWidget.sceneBoundingRect().contains(scene_coords):
                         mouse_point = vb.mapSceneToView(scene_coords)
-                        print(f'clicked plot X: {mouse_point.x()}, Y: {mouse_point.y()}, event: {evt}')
+                        print(f'{self.frame}: [{mouse_point.x()}, {mouse_point.y()}]')
                         match str(self.comboBoxCopyToClipboard.currentText()):
                             case 'Coordinate':
                                 import pyperclip
@@ -140,7 +172,35 @@ class MatplotlibViewer(VideoSupplier):
                             case 'Value':
                                 pass
 
+                def key_pressed(evt, source):
+                    if evt.key() == Qt.Key_Left:
+                        self.frame -= 1
+                        self.redraw(source=source)
+                    if evt.key() == Qt.Key_Right:
+                        self.frame += 1
+                        self.redraw(source=source)
+                    if evt.modifiers() & Qt.ControlModifier:
+                        if evt.key() == Qt.Key_C:
+                            from io import BytesIO
+                            import imageio
+                            import subprocess
+
+                            buffer = BytesIO()
+                            imageio.imwrite(buffer, self.current_frame, format="png")
+                            buffer.seek(0)  # Reset the buffer position
+
+                            # Use xclip to copy the image data to the clipboard
+                            process = subprocess.Popen(
+                                ["xclip", "-selection", "clipboard", "-t", "image/png", "-i"],
+                                stdin=subprocess.PIPE
+                            )
+                            process.communicate(input=buffer.read())
+
+
+
                 self.graphWidget.scene().sigMouseClicked.connect(mouse_clicked)
+                self.graphWidget.keyPressEvent = lambda evt: key_pressed(evt, self.graphWidget)
+
                 self.slider_frame.valueChanged.connect(submit_slider_frame)
                 self.textbox_frame.setText('0')
                 self.textbox_frame.setMaximumWidth(100)

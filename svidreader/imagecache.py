@@ -59,8 +59,8 @@ class PriorityThreadPool(ThreadPool):
         self.loadingQueue = queue.PriorityQueue()
 
     def close(self):
-        super().close()
         self.loadingQueue = None
+        super().close()
 
     def submit(self, task, priority=0, future=Future()):
         self.loadingQueue.put(QueuedLoad(task, priority=priority, future=future))
@@ -69,6 +69,8 @@ class PriorityThreadPool(ThreadPool):
 
     def worker(self):
         try:
+            if self.loadingQueue is None:
+                return
             elem = self.loadingQueue.get(block=True, timeout=1)
             try:
                 res = elem.task()
@@ -183,7 +185,7 @@ class ImageCache(VideoSupplier):
         data = self.inputs[0].read(index=index, force_type=force_type)
         self.last_read = index
         with self.lock:
-            res = self.add_to_cache(index, data, 1 * 7 + index)
+            res = self.add_to_cache(index, data, hash=1 * 7 + index)
             self.clean()
             return res
 

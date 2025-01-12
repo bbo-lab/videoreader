@@ -89,6 +89,8 @@ class VideoSupplier:
 
     @staticmethod
     def convert(img, module):
+        if isinstance(img, str):
+            return img
         if module == None:
             return img
         t = type(img)

@@ -150,6 +150,8 @@ class ImageRange(VideoSupplier):
                 import cv2
                 with self.mutex:
                     buf = self.zipfile.read(frame_name)
+                if frame_name.endswith("svg"):
+                    return buf.decode("utf-8")
                 np_buf = np.frombuffer(buf, np.uint8)
                 res = cv2.imdecode(np_buf, cv2.IMREAD_UNCHANGED)
                 if res.ndim == 3 and res.shape[2] == 3:
@@ -161,6 +163,8 @@ class ImageRange(VideoSupplier):
 
     def read(self, index, force_type=np):
         res = self.read_impl(index)
+        if isinstance(res, str):
+            return res
         if self.keyframe is not None:
             if index % self.keyframe != 0:
                 res += self.read_impl((index // self.keyframe) * self.keyframe)
@@ -186,4 +190,4 @@ def is_image(filename):
     return False
 
 def get_image_endings():
-    return ".png", ".exr", ".jpg", ".bmp"
+    return ".png", ".exr", ".jpg", ".bmp", ".svg"
