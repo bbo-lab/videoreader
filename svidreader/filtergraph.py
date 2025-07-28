@@ -114,7 +114,7 @@ def get_reader(filename, backend="decord", cache=False, options=None):
         pipeline = filename[pipe + 1:]
         filename = filename[0:pipe]
     from svidreader.ImageReader import get_image_endings
-    if os.path.isdir(filename) or filename.endswith(get_image_endings()) or filename.endswith('.zip') or filename.endswith('.raw'):
+    if os.path.isdir(filename) or filename.endswith(get_image_endings()) or filename.endswith('.zip') or filename.endswith('.raw') or filename.endswith('.tif'):
         from svidreader import ImageReader
         res = ImageReader.ImageRange(filename)
         processes = 10
@@ -227,6 +227,10 @@ def create_filtergraph_from_string(inputs, pipeline, gui_callback=None, options=
             elif effectname == "change_framerate":
                 assert len(curinputs) == 1
                 last = ChangeFramerate(curinputs[0], factor=float(effect_options.get('factor')))
+            elif effectname == "image2text":
+                assert len(curinputs) == 1
+                from svidreader.effects import Image2Text
+                last = Image2Text(curinputs[0])
             elif effectname == "light_detector":
                 assert len(curinputs) == 1
                 from svidreader.light_detector import LightDetector
@@ -240,6 +244,19 @@ def create_filtergraph_from_string(inputs, pipeline, gui_callback=None, options=
             elif effectname == "const":
                 assert len(curinputs) == 1
                 last = ConstFrame(curinputs[0], frame=int(effect_options.get('frame')))
+            elif effectname == "trigger":
+                assert len(curinputs) > 1
+                from svidreader.effects import TriggerEffect
+                last = TriggerEffect(curinputs[0], curinputs[1:]),
+            elif effectname == "print":
+                assert len(curinputs) == 1
+                from svidreader.effects import PrintEffect
+                last = PrintEffect(curinputs[0])
+            elif effectname == "midi":
+                assert len(curinputs) == 1
+                from svidreader.midi_sync import MidiSync
+                last = MidiSync(curinputs[0], effect_options.get('input', 0),
+                            effect_options.get('output', 0))
             elif effectname == "convert_colorspace":
                 assert len(curinputs) == 1
                 from svidreader.effects import ConvertColorspace

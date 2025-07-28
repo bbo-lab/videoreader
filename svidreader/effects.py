@@ -19,6 +19,16 @@ class Blur(VideoSupplier):
         return result
 
 
+class Image2Text(VideoSupplier):
+    def __init__(self, reader):
+        super().__init__(n_frames=reader.n_frames, inputs=(reader,))
+
+    def read(self, index, force_type=np):
+        import pytesseract
+        img = self.inputs[0].read(index=index, force_type=force_type)
+        return pytesseract.image_to_string(img, config='digits').strip()
+
+
 class PixelCorrection(VideoSupplier):
     def __init__(self, reader):
         super().__init__(n_frames=reader.n_frames, inputs=(reader,))
@@ -51,7 +61,7 @@ class PixelCorrection(VideoSupplier):
             self.cache = {firstframe: correction}
         else:
             res = self.inputs[0].read(index, force_type=force_type)
-        res = res -  correction
+        res = res - correction
         return xp.clip(res, 0, 255).astype(xp.uint8)
 
 
@@ -174,6 +184,7 @@ class ConvertColorspace(VideoSupplier):
         return rgb
 
 
+
 class Crop(VideoSupplier):
     def __init__(self, reader, x=0, y=0, width=-1, height=-1):
         super().__init__(n_frames=reader.n_frames, inputs=(reader,))
@@ -211,8 +222,7 @@ class Functional(VideoSupplier):
         self.add_index = 'index' in arguments.args
         self.add_force_type = 'force_type' in arguments.args
 
-    def read(self, index, force_type=np):
-        args = {}
+    def read(self, index, force_type=np, **args):
         if self.add_index:
             args['index'] = index
         if self.add_force_type:
@@ -220,9 +230,9 @@ class Functional(VideoSupplier):
         return self.functional(*[inp.read(index=index, force_type=force_type) for inp in self.inputs], **args)
 
 
-def to_array(reader, jobs=1, show_progress=False, iterator=None):
+def to_array(reader:VideoSupplier, jobs=1, show_progress=False, iterator=None, return_result=True, reduce=None, init=None):
     from svidreader import frame_iterator
-    return frame_iterator.FrameIterator(reader, jobs=jobs, iterator=iterator).run(return_result=True, show_progress=show_progress)
+    return frame_iterator.FrameIterator(input=reader, jobs=jobs, iterator=iterator).run(return_result=return_result, show_progress=show_progress, reduce=reduce, init=init)
 
 
 def from_array(data):
@@ -299,9 +309,9 @@ class MaxIndex(VideoSupplier):
         res = {}
         for i in range(self.count):
             cur = locations[i]
-            res['x' + str(i)] = cur[0]
-            res['y' + str(i)] = cur[1]
-            res['c' + str(i)] = values[i]
+            res[f'x{i}'] = cur[0]
+            res[f'y{i}'] = cur[1]
+            res[f'c{i}'] = values[i]
         return res
 
 
@@ -344,7 +354,6 @@ def read_numbers(filename):
 
 
 def read_map(filename, source='from', destination='to', sourceoffset=0, destinationoffset=0):
-    res = {}
     import pandas as pd
     csv = pd.read_csv(filename, sep=' ')
 
@@ -432,11 +441,32 @@ class ChangeFramerate(VideoSupplier):
         return self.inputs[0].read(int(np.round(index * self.factor)), force_type=force_type)
 
 
+class PrintEffect(VideoSupplier):
+    def __init__(self, reader):
+        super().__init__(n_frames=reader.n_frames, inputs=(reader,))
+
+    def read(self, index, force_type=np):
+        frame = self.inputs[0].read(index=index, force_type=force_type)
+        print(frame)
+        return frame
+
+class TriggerEffect(VideoSupplier):
+    def __init__(self,  passthrough_reader, trigger_reader):
+        super().__init__(n_frames=passthrough_reader.n_frames, inputs=(passthrough_reader,*trigger_reader))
+
+    def read(self, index, force_type=np):
+        result = self.inputs[0].read(index=index, force_type=force_type)
+        for i in range(1, len(self.inputs)):
+            self.inputs[i].read(index=index, force_type=force_type)
+        return result
+
+
 class ConstFrame(VideoSupplier):
-    def __init__(self, reader, frame):
-        super().__init__(n_frames=reader.n_frames * 3, inputs=(reader,))
+    def __init__(self, reader=None, frame=0, n_frames=-1, img=None):
+        inputs = () if reader is None else (reader,)
+        super().__init__(n_frames=n_frames, inputs=inputs)
         self.frame = frame
-        self.img = None
+        self.img = img
 
     def read(self, index, force_type=np):
         if self.img is None:
@@ -453,14 +483,35 @@ class FrameDifference(VideoSupplier):
                                                                                                        force_type=force_type)
 
 
+class Reduction(VideoSupplier):
+    def __init__(self, reader, operation="add"):
+        from threading import Lock
+        super().__init__(n_frames=reader.n_frames, inputs=(reader,))
+        self.result = None
+        self.operation = operation
+        self.num_frames = 0
+        self.mutex = Lock()
+
+    def read(self, index, force_type=np):
+        img = self.inputs[0].read(index=index, force_type=force_type)
+        with self.mutex:
+            if self.result is None:
+                self.result = img.astype(np.float32)
+            else:
+                match self.operation:
+                    case "add": self.result += img
+            self.num_frames += 1
+        return self.result
+
+    def get_result(self):
+        return self.result / self.num_frames
+
+
 class Overlay(VideoSupplier):
     def __init__(self, reader, overlay, x=0, y=0):
         super().__init__(n_frames=reader.n_frames, inputs=(reader, overlay))
         self.x, self.y = x, y
-
-        self.overlay_index = lambda index: index
-        if reader.n_frames != overlay.n_frames:
-            self.overlay_index = lambda index: 0
+        self.overlay_index = (lambda index: 1) if overlay.n_frames == 1 else (lambda index: index)
 
     def read(self, index, force_type=np):
         img = self.inputs[0].read(index=index, force_type=force_type)

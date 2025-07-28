@@ -1,4 +1,5 @@
-import imageio
+from enum import Enum
+from imageio import v2 as imageio
 import numpy as np
 from svidreader.video_supplier import VideoSupplier
 import os
@@ -67,20 +68,28 @@ def unpack_10bit_to_16bit_fast(packed_data):
         np.ndarray: A NumPy array of 16-bit integers.
     """
     byte_array = np.frombuffer(packed_data, dtype=np.uint8)
-
     num_bits = len(byte_array) * 8
     aligned_bits = (num_bits // 10) * 10  # Align bits to multiples of 10
     packed_bits = np.unpackbits(byte_array, bitorder='little')[:aligned_bits]
-
     packed_bits = packed_bits.reshape(-1, 10)
-
     unpacked = np.packbits(packed_bits, axis=-1, bitorder='little').view(np.uint16)
-
     return unpacked
+
+
+#Enum for possible image types, tif, zip, raw
+class ImageType(Enum):
+    RAW = "raw"
+    ZIP = "zip"
+    TIF = "tif"
+    FOLDER = "folder"
+    IMG = "img"
+
+
+
 
 class ImageRange(VideoSupplier):
     def __init__(self, folder_file, keyframe=None):
-        self.frames = []
+        self.frames = None
         self.keyframe = keyframe
         self.zipfile = None
         self.imagefile = None
@@ -99,6 +108,7 @@ class ImageRange(VideoSupplier):
                     files = self.zipfile.namelist()
                 except Exception as e:
                     raise zipfile.BadZipFile(f"Cannot read file {self.folder_file}") from e
+                self.filetype = ImageType.ZIP
             elif folder_file.endswith('.raw'):
                 self.rawfile = open(folder_file, 'rb')
                 self.rawfile.seek(0, 2)  # Move the cursor to the end of the file
@@ -111,17 +121,26 @@ class ImageRange(VideoSupplier):
                 self.height = probe_height(chunk, self.width // 16, 1024)
                 self.depth = 10
                 self.frames = np.arange(file_size * 8 // (self.depth * self.width * self.height))
+                self.filetype = ImageType.RAW
             elif is_image(folder_file):
-                super().__init__(n_frames=10000000, inputs=())
-                self.imagefile = imageio.v2.imread(folder_file)
+                if folder_file.endswith('.tif'):
+                    self.imagefile = imageio.mimread(folder_file)
+                    self.filetype = ImageType.TIF
+                    super().__init__(n_frames=len(self.imagefile), inputs=())
+                else:
+                    super().__init__(n_frames=10000000, inputs=())
+                    self.imagefile = imageio.imread(folder_file)
+                    self.filetype = ImageType.IMG
             else:
                 raise Exception(f"File ending of {folder_file} not understood")
         elif os.path.isdir(folder_file):
             files = os.listdir(folder_file)
+            self.filetype = ImageType.FOLDER
         else:
             raise FileNotFoundError(f"Path {folder_file} does not Exist")
         if files is not None:
             files = np.sort(files)
+            self.frames = []
             for f in files:
                 if is_image(f):
                     self.frames.append(f"{folder_file}/{f}" if self.zipfile is None else f)
@@ -131,10 +150,13 @@ class ImageRange(VideoSupplier):
                         fileinfo = yaml.safe_load(buf)
                         if keyframe is None:
                             self.keyframe = fileinfo.get("keyframe", self.keyframe)
-        super().__init__(n_frames=len(self.frames), inputs=())
+        if self.frames is not None:
+            super().__init__(n_frames=len(self.frames), inputs=())
 
     def read_impl(self, index):
         if self.imagefile is not None:
+            if self.filetype == ImageType.TIF:
+                return self.imagefile[index]
             return self.imagefile
         if self.rawfile is not None:
             framesize = (self.width * self.height * self.depth) // 8
@@ -144,12 +166,16 @@ class ImageRange(VideoSupplier):
             chunk = unpack_10bit_to_16bit_fast(chunk)
             return chunk.reshape(self.height, self.width, 1)
         if self.zipfile is not None:
-            frame_name = self.frames[index]
+            if not isinstance(index, str):
+                frame_name = self.frames[index]
+            else:
+                frame_name = index
             try:
                 os.environ["OPENCV_IO_ENABLE_OPENEXR"] = "1"
                 import cv2
                 with self.mutex:
-                    buf = self.zipfile.read(frame_name)
+                    info = self.zipfile.getinfo(frame_name)
+                    buf = self.zipfile.read(info)
                 if frame_name.endswith("svg"):
                     return buf.decode("utf-8")
                 np_buf = np.frombuffer(buf, np.uint8)
@@ -159,7 +185,7 @@ class ImageRange(VideoSupplier):
                 return res
             except Exception as e:
                 raise zipfile.BadZipFile(f"Cannot read file {self.folder_file}") from e
-        return imageio.v2.imread(self.frames[index])
+        return imageio.imread(self.frames[index])
 
     def read(self, index, force_type=np):
         res = self.read_impl(index)
@@ -190,4 +216,4 @@ def is_image(filename):
     return False
 
 def get_image_endings():
-    return ".png", ".exr", ".jpg", ".bmp", ".svg"
+    return ".png", ".exr", ".jpg", ".bmp", ".svg", "tif"

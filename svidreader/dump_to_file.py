@@ -32,6 +32,10 @@ class DumpToFile(VideoSupplier):
             self.type = "png"
         elif outputfile.endswith(".svg"):
             self.type = "svg"
+        elif outputfile.endswith(".tif"):
+            self.type = "tif"
+            import imageio.v2 as imageio
+            self.output = imageio.get_writer(outputfile, format='tiff', mode='I')
         else:
             self.type = "csv"
             self.mapkeys = None
@@ -40,6 +44,7 @@ class DumpToFile(VideoSupplier):
                 self.output.write(comment + '\n')
 
     def close(self, recursive=False):
+        logger.log(logging.DEBUG, f"Closing filewrite {self.outputfile}")
         super().close(recursive=recursive)
         if self.output is not None:
             self.output.close()
@@ -112,6 +117,8 @@ class DumpToFile(VideoSupplier):
         elif self.type == "svg":
             with open(self.output.format(index)) as outfile:
                 outfile.write(data)
+        elif self.type == "tif":
+            self.output.append_data(data)
         elif self.type == "ffmpeg_movie":
             import subprocess as sp
             import os
