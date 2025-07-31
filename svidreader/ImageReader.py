@@ -124,7 +124,25 @@ class ImageRange(VideoSupplier):
                 self.filetype = ImageType.RAW
             elif is_image(folder_file):
                 if folder_file.endswith('.tif'):
-                    self.imagefile = imageio.mimread(folder_file)
+                    #self.imagefile = imageio.mimread(folder_file)
+                    import tifffile
+                    with tifffile.TiffFile(folder_file) as tif:
+                        self.imagefile = []
+                        for pagenumber, page in enumerate(tif.pages):
+                            tags = page.tags
+                            img = page.asarray()
+                            if 'PageNumber' in tags:
+                                pagenumber = tags['PageNumber'].value[0]
+                            if 'XPosition' in tags:
+                                value = tags['XPosition'].value
+                                img = np.roll(img, int(round(value[0] / value[1])), axis=1)
+                            if 'YPosition' in tags:
+                                value = tags['YPosition'].value
+                                img = np.roll(img, int(round(value[0] / value[1])), axis=0)
+                            while len(self.imagefile) <= pagenumber:
+                                self.imagefile.append(None)
+                            self.imagefile[pagenumber] = img
+
                     self.filetype = ImageType.TIF
                     super().__init__(n_frames=len(self.imagefile), inputs=())
                 else:
