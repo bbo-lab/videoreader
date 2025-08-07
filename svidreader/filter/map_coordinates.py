@@ -3,7 +3,7 @@ import numpy as np
 
 
 class MapCoordinates(VideoSupplier):
-    def __init__(self, reader, image_points, interpolation_order=1):
+    def __init__(self, reader:VideoSupplier, image_points:np.ndarray|VideoSupplier, interpolation_order=1):
         inputs = (reader,image_points) if isinstance(image_points, VideoSupplier) else (reader,)
         super().__init__(n_frames=reader.n_frames, inputs=inputs)
         self.interpolation_order = interpolation_order

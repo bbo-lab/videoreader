@@ -120,7 +120,10 @@ class MatplotlibViewer(VideoSupplier):
                 globalLayout.addWidget(self.graphWidget)
 
                 self.updating = True
-                current_frame = self.read(0)
+                try:
+                    current_frame = self.read(0)
+                except Exception as e:
+                    current_frame = np.zeros(shape=(512, 512, 3), dtype=np.uint8)
                 if isinstance(current_frame, str):
                     self.svg_renderer= QtSvg.QSvgRenderer()
                     self.svg_renderer.load(current_frame.encode("utf-8"))

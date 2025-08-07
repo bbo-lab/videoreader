@@ -1,4 +1,5 @@
-import svidreader.filtergraph as filtergraph
+from svidreader import filtergraph
+from svidreader import effects
 import numpy as np
 import argparse
 import queue
@@ -6,8 +7,8 @@ import os
 import threading
 import logging
 import sys
-from tqdm import tqdm
-from tqdm.contrib.concurrent import thread_map
+
+from svidreader.frame_iterator import FrameIterator
 
 
 class GuiApplication:
@@ -52,7 +53,7 @@ def main():
     parser.add_argument('-i', '--input', nargs='*')
     parser.add_argument('-f', '--frames', nargs='*', type=int, default=None)
     parser.add_argument('-o', '--output')
-    parser.add_argument('-g', '--filtergraph')
+    parser.add_argument('-g', '--filtergraph', default=None)
     parser.add_argument('-r', '--recursive')
     parser.add_argument('-j', '--jobs', default=1, type=int)
     parser.add_argument('-vr', '--videoreader', default='iio', choices=('iio', 'decord'))
@@ -81,9 +82,11 @@ def main():
 
     ga = GuiApplication()
     ga.start()
-
-    fg = filtergraph.create_filtergraph_from_string(files, args.filtergraph, gui_callback=ga.gui_callback)
-    out = fg['out']
+    if args.filtergraph is None:
+        out = files[0]
+    else:
+        fg = filtergraph.create_filtergraph_from_string(files, args.filtergraph, gui_callback=ga.gui_callback)
+        out = fg['out']
     ga.run()
 
     def signal_handler(sig, frame):
@@ -94,7 +97,8 @@ def main():
 
     outputfile = None
     if args.output is not None:
-        outputfile = open(args.output, 'w')
+        if args.output.endswith('.txt') or args.output.endswith('.csv'):
+            outputfile = open(args.output, 'w')
 
     if args.matplotlib:
         import matplotlib.pyplot as plt
@@ -103,16 +107,17 @@ def main():
     else:
         frames = range(out.n_frames) if args.frames is None else args.frames
         try:
-            def process_frame(frame_idx):
-                data = out.read(index=frame_idx)
-                if outputfile is not None:
-                    outputfile.write(f"{frame_idx} {' '.join(map(str, np.asarray([data]).flatten()))} \n")
+            @effects.video_functional
+            def process_frame(img, index):
+                if args.output is not None:
+                    if outputfile is not None:
+                        outputfile.write(f"{index} {' '.join(map(str, np.asarray([img]).flatten()))}\n")
+                    elif args.output.endswith('.png'):
+                        from imageio import v3 as iio
+                        iio.imwrite(args.output.format(index), img)
 
-            if args.jobs != 1:
-                thread_map(process_frame, frames, max_workers=args.jobs, chunksize=1)
-            else:
-                for frame_idx in tqdm(frames):
-                    process_frame(frame_idx)
+            FrameIterator(process_frame(out), jobs=int(args.jobs), force_type=np, iterator=frames).run(
+                return_result=False, show_progress=True)
         except Exception:
             out.close()
             raise

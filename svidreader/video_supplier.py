@@ -36,8 +36,9 @@ class VideoSupplier:
     def __exit__(self, exc_type, exc_value, traceback):
         self.num_entered -= 1
         if self.num_entered == 0:
-            for inp in self.inputs:
-                inp.__exit__(exc_type, exc_value, traceback)
+            if self.inputs is not None:
+                for inp in self.inputs:
+                    inp.__exit__(exc_type, exc_value, traceback)
             self.close()
 
     def __del__(self):

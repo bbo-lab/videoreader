@@ -43,6 +43,15 @@ class DumpToFile(VideoSupplier):
             if comment is not None:
                 self.output.write(comment + '\n')
 
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        self.close(recursive=True)
+        if exc_type is not None:
+            logger.log(logging.ERROR, f"Exception in DumpToFile: {exc_value}")
+        return False
+
     def close(self, recursive=False):
         logger.log(logging.DEBUG, f"Closing filewrite {self.outputfile}")
         super().close(recursive=recursive)
@@ -118,7 +127,11 @@ class DumpToFile(VideoSupplier):
             with open(self.output.format(index)) as outfile:
                 outfile.write(data)
         elif self.type == "tif":
-            self.output.append_data(data)
+            if np.any(np.isnan(data)):
+                logger.log(logging.WARNING, f"NaN values in frame {index} of {self.outputfile}, replacing with 0")
+                data = np.nan_to_num(data, nan=0)
+            with self.l:
+                self.output.append_data(data)
         elif self.type == "ffmpeg_movie":
             import subprocess as sp
             import os

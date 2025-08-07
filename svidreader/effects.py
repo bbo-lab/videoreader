@@ -105,12 +105,14 @@ class MarkBorder(VideoSupplier):
 
     def read(self, index, force_type=np):
         image = self.inputs[0].read(index, force_type=force_type)
+        if force_type is None:
+            force_type = np
         xp = force_type
         border = xp.zeros_like(image, dtype=bool)
         masked = image > 128
         for i in range(2):
-            for dir in (-1, 1):
-                xp.logical_or(xp.roll(masked, dir, axis=i), border, out=border)
+            for direction in (-1, 1):
+                xp.logical_or(xp.roll(masked, direction, axis=i), border, out=border)
         xp.logical_and(border, ~masked, out=border)
         return border.astype(np.uint8) * 255
 
@@ -209,7 +211,7 @@ def video_generator(num_frames):
 
 
 def video_functional(functional):
-    return lambda x: Functional([x], functional)
+    return lambda x, y=None: Functional([x] if y is None else [x, y], functional)
 
 
 class Functional(VideoSupplier):
