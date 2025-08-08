@@ -33,6 +33,10 @@ class SVidReader(VideoSupplier):
             iio2_reader = iio2.get_reader(self.video)
             self.reader.n_frames = len(iio2_reader)
             self.mdata = iio2_reader.get_meta_data()
+            self.mdata["sensor"] = dict(self.mdata["sensor"])
+            for key in ["offset", "size"]:
+                self.mdata["sensor"][key] = list(self.mdata["sensor"][key])
+            del self.mdata["sensor"]["_io"]
         else:
            self.reader.n_frames = self.vprops.shape[0]
         if cache is None:
