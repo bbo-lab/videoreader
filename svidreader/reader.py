@@ -22,6 +22,8 @@ class SVidReader(VideoSupplier):
         self.hash = None
 
         if video[-4:] == '.ccv':
+            # This import is needed for imageio to read ccv files, even though it is not used directly.
+            from ccvtools import rawio
             self.plugin = None
 
         pipe = self.video.find("|")
@@ -33,8 +35,6 @@ class SVidReader(VideoSupplier):
         self.mdata = iio.immeta(self.video, plugin=self.plugin, exclude_applied=False)
         self.reader = iio.imopen(self.video, "r", plugin=self.plugin)
         if video[-4:] == '.ccv':
-            #This import is needed for imageio to read ccv files, even though it is not used directly.
-            from ccvtools import rawio
             iio2_reader = iio2.get_reader(self.video)
             self.reader.n_frames = len(iio2_reader)
             self.mdata = iio2_reader.get_meta_data()
