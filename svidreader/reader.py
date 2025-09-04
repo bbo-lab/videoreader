@@ -3,6 +3,7 @@ from copy import deepcopy
 
 import imageio.v3 as iio
 import imageio.v2 as iio2
+import os
 import numpy as np
 from svidreader.video_supplier import VideoSupplier
 from svidreader.imagecache import ImageCache
@@ -26,10 +27,14 @@ class SVidReader(VideoSupplier):
         pipe = self.video.find("|")
         if pipe >= 0:
             self.video = self.video[0:pipe]
+        if not os.path.exists(self.video):
+            raise FileNotFoundError(f"Video file {self.video} does not exist.")
         self.vprops = iio.improps(self.video, plugin=self.plugin)
         self.mdata = iio.immeta(self.video, plugin=self.plugin, exclude_applied=False)
         self.reader = iio.imopen(self.video, "r", plugin=self.plugin)
         if video[-4:] == '.ccv':
+            #This import is needed for imageio to read ccv files, even though it is not used directly.
+            from ccvtools import rawio
             iio2_reader = iio2.get_reader(self.video)
             self.reader.n_frames = len(iio2_reader)
             self.mdata = iio2_reader.get_meta_data()
@@ -38,7 +43,7 @@ class SVidReader(VideoSupplier):
                 self.mdata["sensor"][key] = list(self.mdata["sensor"][key])
             del self.mdata["sensor"]["_io"]
         else:
-           self.reader.n_frames = self.vprops.shape[0]
+            self.reader.n_frames = self.vprops.shape[0]
         if cache is None:
             self.reader.get_key_indices = lambda : None
             self.reader = ImageCache(self.reader, maxcount=500)
