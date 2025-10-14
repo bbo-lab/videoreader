@@ -19,7 +19,10 @@ This is a simple tool if you want to use the videoreader from the commandline. Y
  - '-g', '--filtergraph' \<The filtegraph which is applied\>
 
 #### Examples:
- - python3 svidreader/run_pipeline.py -i ../test/cubes.mp4 --filtergraph "contrast" --output test.csv
+ - Reading out the contrast\
+ python3 svidreader/run_pipeline.py -i ../test/cubes.mp4 --filtergraph "contrast" --output test.csv
+ - Converting a video file\
+ python3 -m svidreader -i ../test/cubes.mp4 -g dump=output=cubes_converted.mp4
 #### List of effects:
  - scale\
    Scales input by a given factor\
