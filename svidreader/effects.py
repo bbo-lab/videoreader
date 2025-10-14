@@ -232,9 +232,9 @@ class Functional(VideoSupplier):
         return self.functional(*[inp.read(index=index, force_type=force_type) for inp in self.inputs], **args)
 
 
-def to_array(reader:VideoSupplier, jobs=1, show_progress=False, iterator=None, return_result=True, reduce=None, init=None):
+def to_array(reader:VideoSupplier, jobs=1, show_progress=False, iterator=None, return_result=True, reduce=None, init=None, filter=None, return_length=False):
     from svidreader import frame_iterator
-    return frame_iterator.FrameIterator(input=reader, jobs=jobs, iterator=iterator).run(return_result=return_result, show_progress=show_progress, reduce=reduce, init=init)
+    return frame_iterator.FrameIterator(input=reader, jobs=jobs, iterator=iterator).run(return_result=return_result, show_progress=show_progress, reduce=reduce, init=init, filter=filter, return_length=return_length)
 
 
 def from_array(data):
@@ -249,6 +249,44 @@ class ArrayReader(VideoSupplier):
     def read(self, index, force_type=np):
         return VideoSupplier.convert(self.data[index], force_type)
 
+
+class GenImage(VideoSupplier):
+    def __init__(self, expression, width, height):
+        self.expression = expression
+        self.width = width
+        self.height = height
+        self.grid = np.meshgrid(np.linspace(-1, 1, self.width), np.linspace(-1,1,self.height))
+        self.exp = compile(expression, '<string>', 'exec')
+
+    def read(self, index, force_type=np):
+        args = {
+            'index':index,
+            'normgrid':self.grid
+        }
+        ldict = {}
+        exec(self.exp, args, ldict)
+        return VideoSupplier.convert(ldict['out'], force_type)
+
+class MaskAlpha(VideoSupplier):
+    def __init__(self, reader, figure="circle"):
+        super().__init__(n_frames=reader.n_frames, inputs=(reader,))
+        self.figure = figure
+
+    def read(self, index, force_type=np):
+        img = self.inputs[0].read(index=index, force_type=force_type)
+        if self.figure == "circle":
+            mgrid = np.meshgrid(np.linspace(-1,1,img.shape[0]), np.linspace(-1,1,img.shape[1]))
+            mask = (np.sum(np.square(mgrid), axis=0) < 1).astype(np.uint8) * 255
+            if img.shape[2] == 3:
+                img = np.stack((*np.moveaxis(img, -1, 0), mask), axis=-1)
+            elif img.shape[2] == 4:
+                img = img.copy()
+                img[..., 3] = img[..., 3] * mask
+            else:
+                raise Exception(f"Image with shape {img.shape} not supported")
+        else:
+            raise Exception(f"Figure {self.figure} not known")
+        return img
 
 class Math(VideoSupplier):
     def __init__(self, reader, expression, library='numpy'):
@@ -270,7 +308,7 @@ class Math(VideoSupplier):
         return "math"
 
     def read(self, index, force_type=np):
-        args = {'i' + str(i): self.inputs[i].read(index=index, force_type=self.xp) for i in range(len(self.inputs))}
+        args = {f'i{i}': self.inputs[i].read(index=index, force_type=self.xp) for i in range(len(self.inputs))}
         args['np'] = np
         args['xp'] = self.xp
         ldict = {}

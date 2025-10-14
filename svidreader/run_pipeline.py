@@ -55,6 +55,7 @@ def main():
     parser.add_argument('-o', '--output')
     parser.add_argument('-g', '--filtergraph', default=None)
     parser.add_argument('-r', '--recursive')
+    parser.add_argument('--encoder', default=None)
     parser.add_argument('-j', '--jobs', default=1, type=int)
     parser.add_argument('-vr', '--videoreader', default='iio', choices=('iio', 'decord'))
     parser.add_argument('-ac', '--autocache', default='True', choices=('True', 'False'))
@@ -99,6 +100,14 @@ def main():
     if args.output is not None:
         if args.output.endswith('.txt') or args.output.endswith('.csv'):
             outputfile = open(args.output, 'w')
+        elif args.output.endswith('.mp4') or args.output.endswith('.zip'):
+            from svidreader.dump_to_file import DumpToFile
+            dump_options = {}
+            if args.encoder is not None:
+                dump_options["encoder"] = args.encoder
+            out = DumpToFile(reader=out,
+                             outputfile=args.output,
+                             opts=dump_options)
 
     if args.matplotlib:
         import matplotlib.pyplot as plt

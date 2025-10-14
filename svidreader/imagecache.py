@@ -59,8 +59,9 @@ class PriorityThreadPool(ThreadPool):
         self.loadingQueue = queue.PriorityQueue()
 
     def close(self):
-        self.loadingQueue = None
-        super().close()
+        if self.loadingQueue is not None:
+            self.loadingQueue = None
+            super().close()
 
     def submit(self, task, priority=0, future=Future()):
         self.loadingQueue.put(QueuedLoad(task, priority=priority, future=future))
@@ -91,7 +92,7 @@ class FrameStatus(IntEnum):
 
 class ImageCache(VideoSupplier):
     def __init__(self, reader, keyframes=None, maxcount=100, processes=1, preload=20, connect_segments=None):
-        super().__init__(n_frames=reader.n_frames, inputs=(reader,))
+        super().__init__(n_frames=len(reader), inputs=(reader,))
         if self.n_frames > 0:
             self.framestatus = np.full(shape=(self.n_frames,), dtype=np.uint8, fill_value=FrameStatus.NOT_CACHED)
         else:
@@ -210,7 +211,7 @@ class ImageCache(VideoSupplier):
 
     def read(self, index=None, blocking=True, force_type=np):
         if index >= self.n_frames:
-            raise Exception('Out of bounds, frame ' + str(index) + ' of ' + str(self.n_frames) + 'requested')
+            raise Exception(f'Out of bounds, frame {index} of {self.n_frames} requested')
         with self.lock:
             res = self.cached.get(index)
         if res is None:

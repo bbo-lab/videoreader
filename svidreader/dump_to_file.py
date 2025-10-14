@@ -7,7 +7,15 @@ logger = logging.getLogger(__name__)
 
 
 class DumpToFile(VideoSupplier):
-    def __init__(self, reader, outputfile, writer=None, opts=None, makedir=False, comment=None, fps=None):
+    def __init__(self,
+                 reader,
+                 outputfile,
+                 writer=None,
+                 opts=None,
+                 makedir=False,
+                 comment=None,
+                 fps=None,
+                 keep_order:bool|int=False):
         super().__init__(n_frames=reader.n_frames, inputs=(reader,))
         if opts is None:
             opts = {}
@@ -17,11 +25,13 @@ class DumpToFile(VideoSupplier):
         self.pipe = None
         self.shape = None
         self.fps = fps
+        self.last_index = None
+        self.keep_order = keep_order
         self.opts = opts
         if makedir:
             from pathlib import Path
             Path(outputfile).parent.mkdir(parents=True, exist_ok=True)
-        if writer is not None and writer == "ffmpeg":
+        if ('encoder' in self.opts and outputfile.endswith('.mp4')) or (writer is not None and writer == "ffmpeg"):
             self.type = "ffmpeg_movie"
         elif outputfile.endswith('.mp4'):
             self.type = "movie"
@@ -63,12 +73,11 @@ class DumpToFile(VideoSupplier):
             self.pipe.wait()
             self.pipe = None
 
-    def read(self, index, force_type=np):
-        data = self.inputs[0].read(index=index, force_type=force_type)
+    def write(self, index, data):
         if self.type == "movie":
             import imageio
             if self.output is None:
-                self.output = imageio.get_writer(self.outputfile, fps=self.fps, quality=8)
+                self.output = imageio.get_writer(self.outputfile, fps=self.fps, quality=int(self.opts.get("quality",8)))
             if data is not None:
                 with self.l:
                     self.output.append_data(data)
@@ -177,10 +186,14 @@ class DumpToFile(VideoSupplier):
                                '-qmax', '26',
                                *quality,
                                self.outputfile]
-                    print(command)
                     logger.log(logging.INFO, f"{' '.join(command)}")
                     self.pipe = sp.Popen(command, stdin=sp.PIPE, stderr=sp.STDOUT, bufsize=1000, preexec_fn=os.setpgrp)
                 assert self.shape == data.shape
                 assert data.dtype == np.uint8
                 self.pipe.stdin.write(data.tobytes())
+        self.last_index = index
+
+    def read(self, index, force_type=np):
+        data = self.inputs[0].read(index=index, force_type=force_type)
+        self.write(index, data)
         return data

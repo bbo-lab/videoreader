@@ -17,9 +17,10 @@ class FrameIterator(VideoSupplier):
         image = self.inputs[0].read(index=index, force_type=force_type)
         return image if return_result else None
 
-    def run(self, return_result=False, show_progress = False, init=None, reduce=None):
+    def run(self, return_result=False, show_progress = False, init=None, reduce=None, filter=None, return_length=False):
         result = []
         aggregate = init
+        count = 0
         if reduce is not None:
             return_result = False
         if reduce is None:
@@ -29,9 +30,12 @@ class FrameIterator(VideoSupplier):
             lock = Lock()
             def functional(frame_idx):
                 nonlocal aggregate
+                nonlocal count
                 tmp = self.read(index=frame_idx, force_type=self.force_type, return_result=True)
-                with lock:
-                    aggregate = reduce(aggregate, tmp)
+                if filter is None or filter(tmp):
+                    with lock:
+                        aggregate = reduce(aggregate, tmp)
+                        count += 1
 
         if self.jobs != 1:
             args = {}
@@ -44,5 +48,8 @@ class FrameIterator(VideoSupplier):
                 if return_result:
                     result.append(tmp)
         if reduce is not None:
-            return aggregate
+            if return_length:
+                return aggregate, count
+            else:
+                return aggregate
         return result if return_result else None

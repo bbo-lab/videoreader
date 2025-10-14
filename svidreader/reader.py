@@ -7,6 +7,8 @@ import os
 import numpy as np
 from svidreader.video_supplier import VideoSupplier
 from svidreader.imagecache import ImageCache
+import logging
+logger = logging.getLogger(__name__)
 
 
 class SVidReader(VideoSupplier):
@@ -96,15 +98,15 @@ class SVidReader(VideoSupplier):
         tries = 0
         while imghash != fr_hash:
             cur_fr_idx = self.hashes.index(imghash)
-            print(f"SVidReader: Wanted {fr_idx}, tryed {requ_idx}, got {cur_fr_idx},", end="")
+            logger.log(logging.WARNING, f"SVidReader: Wanted {fr_idx}, tryed {requ_idx}, got {cur_fr_idx},", end="")
             self.has_issues = True
             if tries > 5:
-                print("quitting")
+                logger.log(logging.ERROR, "quitting")
                 raise FrameNotFoundError()
             tries += 1
 
             requ_idx = requ_idx + fr_idx - cur_fr_idx
-            print(f"try {requ_idx}")
+            logger.log(logging.WARNING, f"try {requ_idx}")
 
             img = self.reader.read(index=requ_idx)
             imghash = hashlib.md5(img).hexdigest()
