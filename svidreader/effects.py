@@ -3,7 +3,7 @@ import numpy as np
 import inspect
 
 
-class Blur(VideoSupplier):
+class MotionBlur(VideoSupplier):
     def __init__(self, inputs, weights):
         super().__init__(n_frames=inputs[0].n_frames, inputs=inputs)
         self.weights = weights
@@ -17,6 +17,17 @@ class Blur(VideoSupplier):
             else:
                 result += tmp
         return result
+
+
+class GaussianBlur(VideoSupplier):
+    def __init__(self, reader, sigma=1):
+        super().__init__(n_frames=reader.n_frames, inputs=(reader,))
+        self.sigma = sigma
+
+    def read(self, index, force_type=np):
+        from scipy.ndimage import gaussian_filter
+        img = self.inputs[0].read(index=index, force_type=force_type)
+        return gaussian_filter(img, sigma=self.sigma, axes=(0, 1))
 
 
 class Image2Text(VideoSupplier):

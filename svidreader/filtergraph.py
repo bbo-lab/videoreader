@@ -113,6 +113,9 @@ def get_reader(filename, backend="decord", cache=False, options=None):
     if pipe >= 0:
         pipeline = filename[pipe + 1:]
         filename = filename[0:pipe]
+    if filename.endswith(".ccv") and backend != 'iio':
+        logger.log(logging.WARN, "Using iio backend for ccv files, ignoring backend setting")
+        backend = "iio"
     from svidreader.ImageReader import get_image_endings
     if os.path.isdir(filename) or filename.endswith(get_image_endings()) or filename.endswith('.zip') or filename.endswith('.raw') or filename.endswith('.tif'):
         from svidreader import ImageReader
@@ -179,7 +182,7 @@ def create_filtergraph_from_string(inputs, pipeline, gui_callback=None, options=
             if effectname == 'cache':
                 assert len(curinputs) == 1
                 last = ImageCache(curinputs[0], maxcount=effect_options.get('cmax', 1000),
-                                  processes=effect_options.get('num_threads', 1),
+                                  processes=int(effect_options.get('num_threads', 1)),
                                   preload=effect_options.get('preload', 20))
             elif effectname == 'minicache':
                 assert len(curinputs) == 1
@@ -201,6 +204,11 @@ def create_filtergraph_from_string(inputs, pipeline, gui_callback=None, options=
             elif effectname == 'reader':
                 assert noinput
                 last = get_reader(effect_options['input'], backend=effect_options.get("backend", "iio"), cache=False)
+            elif effectname == 'gaussian':
+                assert len(curinputs) == 1
+                from svidreader.effects import GaussianBlur
+                last = GaussianBlur(curinputs[0],
+                                             sigma=float(effect_options.get('sigma', 1.0)))
             elif effectname == 'flow':
                 assert len(curinputs) == 1
                 import svidreader.filter.flow as flow
@@ -248,6 +256,10 @@ def create_filtergraph_from_string(inputs, pipeline, gui_callback=None, options=
                 assert len(curinputs) > 1
                 from svidreader.effects import TriggerEffect
                 last = TriggerEffect(curinputs[0], curinputs[1:]),
+            elif effectname == "alphamask":
+                assert len(curinputs) == 1
+                from svidreader.effects import MaskAlpha
+                last = MaskAlpha(curinputs[0], figure=effect_options.get('mask'),)
             elif effectname == "print":
                 assert len(curinputs) == 1
                 from svidreader.effects import PrintEffect
