@@ -4,6 +4,7 @@ try:
     import cupy as xp
 except ModuleNotFoundError:
     import numpy as xp
+
 class MajorityVote(VideoSupplier):
     def __init__(self, reader, window, scale, foreground = False):
         super().__init__(n_frames=reader.n_frames, inputs=(reader,))
@@ -11,9 +12,10 @@ class MajorityVote(VideoSupplier):
         self.scale = float(scale)
         self.cache = {}
         self.stack = {}
-        self.gauss = xp.fuse(MajorityVote.get_gauss(self.scale))
+        self.gauss = MajorityVote.get_gauss(self.scale)
+        if xp != np:
+            self.gauss = xp.fuse(self.gauss)
         self.foreground = foreground
-        print(scale, window, foreground)
 
     @staticmethod
     def get_gauss(scale):
