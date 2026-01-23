@@ -15,36 +15,43 @@ class ColorMapper(VideoSupplier):
 
         def map_colors(query_colors):
             query_colors = np.atleast_2d(query_colors)  # Ensure input is 2D
+
+            mapped_colors = np.empty((query_colors.shape[0], destination_colors.shape[1]))
             # Find simplices (triangles) for each query color
             simplices = delaunay.find_simplex(query_colors)
 
             # Handle colors outside the convex hull
             outside_mask = simplices == -1
-            if np.any(outside_mask):
-                query_colors_outside = query_colors[outside_mask]
+            inside_mask = ~outside_mask
 
-                # Compute distances to all source colors
-                distances = np.linalg.norm(
-                    source_colors[None, :, :] - query_colors_outside[:, None, :],
+            if np.any(outside_mask):
+                qc_out = query_colors[outside_mask]
+
+                # Precompute simplex centroids ONCE if you want to optimize
+                simplex_centers = source_colors[delaunay.simplices].mean(axis=1)
+
+                dists = np.linalg.norm(
+                    simplex_centers[None, :, :] - qc_out[:, None, :],
                     axis=2
                 )
 
-                # Find the two nearest neighbors
-                nearest_indices = np.argsort(distances, axis=1)[:, :2]
-                nearest_source = source_colors[nearest_indices]
-                nearest_dest = destination_colors[nearest_indices]
+                nearest_simplex = np.argmin(dists, axis=1)
 
-                # Compute weights for interpolation
-                weights = 1 / distances[:, nearest_indices]
-                weights = weights / weights.sum(axis=1, keepdims=True)
+                vertices = delaunay.simplices[nearest_simplex]
+                transform = delaunay.transform[nearest_simplex]
 
-                # Interpolate using the weights
-                outside_colors = (weights[:, :, None] * nearest_dest).sum(axis=1)
-            else:
-                outside_colors = np.empty((0, destination_colors.shape[1]))
+                deltas = qc_out - transform[:, 3]
+                bary = np.einsum('ijk,ik->ij', transform[:, :3], deltas)
+                bary = np.hstack([bary, 1 - bary.sum(axis=1, keepdims=True)])
+
+                dest_vertices = destination_colors[vertices]
+                outside_colors = np.einsum(
+                    'ij,ijk->ik', bary, dest_vertices
+                )
+
+                mapped_colors[outside_mask] = outside_colors
 
             # Handle colors inside the convex hull
-            inside_mask = ~outside_mask
             inside_colors = np.empty((0, destination_colors.shape[1]))
             if np.any(inside_mask):
                 query_colors_inside = query_colors[inside_mask]
@@ -65,10 +72,7 @@ class ColorMapper(VideoSupplier):
                 destination_vertices = destination_colors[vertices]
                 inside_colors = np.einsum('ij,ijk->ik', bary_coords, destination_vertices)
 
-            # Combine inside and outside results
-            mapped_colors = np.zeros((query_colors.shape[0], destination_colors.shape[1]))
-            mapped_colors[outside_mask] = outside_colors
-            mapped_colors[inside_mask] = inside_colors
+                mapped_colors[inside_mask] = inside_colors
 
             return mapped_colors
         self.map_colors = map_colors
