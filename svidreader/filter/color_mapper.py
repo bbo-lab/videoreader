@@ -8,7 +8,7 @@ class ColorMapper(VideoSupplier):
         self.map_colors = self.get_color_mapper(source_colors, destination_colors)
 
     @staticmethod
-    def get_color_mapper(source_colors:np.ndarray, destination_colors:np.ndarray):
+    def get_color_mapper(source_colors:np.ndarray|list, destination_colors:np.ndarray|list):
         # Create a Delaunay triangulation for the source colors
 
         source_colors = np.array(source_colors)
@@ -41,8 +41,8 @@ class ColorMapper(VideoSupplier):
                 vertices = delaunay.simplices[nearest_simplex]
                 transform = delaunay.transform[nearest_simplex]
 
-                deltas = qc_out - transform[:, 3]
-                bary = np.einsum('ijk,ik->ij', transform[:, :3], deltas)
+                deltas = qc_out - transform[:, -1]
+                bary = np.einsum('ijk,ik->ij', transform[:, :-1], deltas)
                 bary = np.hstack([bary, 1 - bary.sum(axis=1, keepdims=True)])
 
                 dest_vertices = destination_colors[vertices]
@@ -63,8 +63,8 @@ class ColorMapper(VideoSupplier):
                 transform = delaunay.transform[simplices_inside]
 
                 # Compute barycentric coordinates
-                deltas = query_colors_inside - transform[:, 3]
-                bary_coords = np.einsum('ijk,ik->ij', transform[:, :3], deltas)
+                deltas = query_colors_inside - transform[:, -1]
+                bary_coords = np.einsum('ijk,ik->ij', transform[:, :-1], deltas)
 
                 # Include the weight for the last vertex (1 - sum(barycentric))
                 bary_coords = np.hstack([bary_coords, 1 - bary_coords.sum(axis=1, keepdims=True)])
