@@ -5,18 +5,19 @@ from scipy.spatial import Delaunay
 class ColorMapper(VideoSupplier):
     def __init__(self, reader, source_colors, destination_colors):
         super().__init__(n_frames=reader.n_frames, inputs=(reader,))
-        self.cache = (None,None)
-        # Ensure inputs are numpy arrays
+        self.map_colors = self.get_color_mapper(source_colors, destination_colors)
+
+    @staticmethod
+    def get_color_mapper(source_colors:np.ndarray, destination_colors:np.ndarray):
+        # Create a Delaunay triangulation for the source colors
+
         source_colors = np.array(source_colors)
         destination_colors = np.array(destination_colors)
-
-        # Create a Delaunay triangulation for the source colors
         delaunay = Delaunay(source_colors)
-
         def map_colors(query_colors):
             query_colors = np.atleast_2d(query_colors)  # Ensure input is 2D
 
-            mapped_colors = np.empty((query_colors.shape[0], destination_colors.shape[1]))
+            mapped_colors = np.empty((*query_colors.shape[:-1], destination_colors.shape[1]))
             # Find simplices (triangles) for each query color
             simplices = delaunay.find_simplex(query_colors)
 
@@ -75,8 +76,7 @@ class ColorMapper(VideoSupplier):
                 mapped_colors[inside_mask] = inside_colors
 
             return mapped_colors
-        self.map_colors = map_colors
-
+        return map_colors
 
     def read(self, index, force_type=np):
         current = self.inputs[0].read(index=index, force_type=np)
