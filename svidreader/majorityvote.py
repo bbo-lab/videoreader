@@ -12,46 +12,47 @@ class MajorityVote(VideoSupplier):
         self.scale = float(scale)
         self.cache = {}
         self.stack = {}
-        self.gauss = MajorityVote.get_gauss(self.scale)
-        if xp != np:
-            self.gauss = xp.fuse(self.gauss)
+        self.distance_function = MajorityVote.get_gauss(self.scale, xp=xp)
         self.foreground = foreground
 
     @staticmethod
-    def get_gauss(scale):
+    def get_gauss(scale, xp=np):
         scale = 1 / scale
         def gauss(x, y):
             diff = (x - y) * scale
             return xp.exp(-xp.sum(xp.square(diff), axis=2))
-        return gauss
+        if xp == np:
+            return gauss
+        else:
+            return xp.fuse(gauss)
+
+    def add_to_stack(self, index:int) -> xp.ndarray:
+        if index not in self.stack:
+            self.stack[index] = self.inputs[0].read(index = index, force_type=xp)
+        return self.stack[index]
 
     def read(self, index, force_type=np):
         begin = max(0, index - self.window)
         end = min(index + self.window, self.n_frames)
         for i in range(begin, end):
-            if i not in self.stack:
-                self.stack[i] = self.inputs[0].read(index = i, force_type=xp)
+            self.add_to_stack(index=i)
         shape = self.stack[begin].shape[0:2]
         cache_next = {}
+        should_include = np.arange(begin, end)
         for i in range(begin, end):
-            curimage = self.stack[i].astype(xp.float32)
+            curimage = self.stack[i].astype(xp.float32, copy=False)
             if i in self.cache:
                 ca  = self.cache[i]
                 sum = xp.array(ca[2], dtype=xp.float32, copy=True)
                 does_include = np.arange(ca[0], ca[1])
-                should_include = np.arange(begin, end)
                 for j in np.setdiff1d(should_include, does_include):
-                    if j not in self.stack:
-                        self.stack[j] = self.inputs[0].read(index=j, force_type=xp)
-                    sum += self.gauss(curimage, self.stack[j])
+                    sum += self.distance_function(curimage, self.add_to_stack(j))
                 for j in np.setdiff1d(does_include, should_include):
-                    if j not in self.stack:
-                        self.stack[j] = self.inputs[0].read(index=j, force_type=xp)
-                    sum -= self.gauss(curimage, self.stack[j])
+                    sum -= self.distance_function(curimage, self.add_to_stack(j))
             else:
                 sum = xp.zeros(shape=shape, dtype=xp.float32)
                 for j in range(begin, end):
-                    sum += self.gauss(curimage, self.stack[j])
+                    sum += self.distance_function(curimage, self.add_to_stack(j))
             cache_next[i] = (begin, end, sum)
             if i == begin:
                 best_sum = xp.copy(sum)
@@ -62,7 +63,7 @@ class MajorityVote(VideoSupplier):
                 else:
                     mask = best_sum < sum
                 xp.copyto(best_sum, sum, where = mask)
-                xp.copyto(result, self.stack[i], where=mask[:,:,np.newaxis])
+                xp.copyto(result, self.stack[i], where=mask[:,:,xp.newaxis])
         for k, v in list(self.stack.items()):
             if k < begin or k > end:
                 del self.stack[k]
