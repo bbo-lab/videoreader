@@ -91,7 +91,7 @@ class FrameStatus(IntEnum):
 
 
 class ImageCache(VideoSupplier):
-    def __init__(self, reader, keyframes=None, maxcount=100, processes=1, preload=20, connect_segments=None):
+    def __init__(self, reader, keyframes=None, maxcount=100, processes:int=1, preload=20, connect_segments=None):
         super().__init__(n_frames=len(reader), inputs=(reader,))
         if self.n_frames > 0:
             self.framestatus = np.full(shape=(self.n_frames,), dtype=np.uint8, fill_value=FrameStatus.NOT_CACHED)

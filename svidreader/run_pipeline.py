@@ -1,5 +1,6 @@
 from svidreader import filtergraph
 from svidreader import effects
+from svidreader import imagecache
 import numpy as np
 import argparse
 import queue
@@ -56,6 +57,7 @@ def main():
     parser.add_argument('-g', '--filtergraph', default=None)
     parser.add_argument('-r', '--recursive')
     parser.add_argument('--encoder', default=None)
+    parser.add_argument('--fps', default=None, type=int)
     parser.add_argument('-j', '--jobs', default=1, type=int)
     parser.add_argument('-vr', '--videoreader', default='iio', choices=('iio', 'decord'))
     parser.add_argument('-ac', '--autocache', default='True', choices=('True', 'False'))
@@ -105,8 +107,11 @@ def main():
             dump_options = {}
             if args.encoder is not None:
                 dump_options["encoder"] = args.encoder
+            if args.output.endswith('.mp4') and args.jobs > 1:
+                out = imagecache.ImageCache(out, processes=args.jobs)  # Disable caching for DumpToFile
             out = DumpToFile(reader=out,
                              outputfile=args.output,
+                             fps=args.fps,
                              opts=dump_options)
         elif not args.output.endswith('.png'):
             raise Exception("Unsupported output format")
@@ -128,7 +133,7 @@ def main():
                         os.makedirs(os.path.dirname(args.output.format(index)), exist_ok=True)
                         iio.imwrite(args.output.format(index), img)
 
-            FrameIterator(process_frame(out), jobs=int(args.jobs), force_type=np, iterator=frames).run(
+            FrameIterator(process_frame(out), jobs=int(1 if args.output.endswith(".mp4") else args.jobs), force_type=np, iterator=frames).run(
                 return_result=False, show_progress=True)
         except Exception:
             out.close()

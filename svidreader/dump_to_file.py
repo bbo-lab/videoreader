@@ -42,7 +42,7 @@ class DumpToFile(VideoSupplier):
             self.type = "png"
         elif outputfile.endswith(".svg"):
             self.type = "svg"
-        elif outputfile.endswith(".tif"):
+        elif outputfile.endswith(".tif") or outputfile.endswith(".tiff"):
             self.type = "tif"
             import imageio.v2 as imageio
             self.output = imageio.get_writer(outputfile, format='tiff', mode='I')
@@ -77,7 +77,12 @@ class DumpToFile(VideoSupplier):
         if self.type == "movie":
             import imageio
             if self.output is None:
-                self.output = imageio.get_writer(self.outputfile, fps=self.fps, quality=int(self.opts.get("quality",8)))
+                self.output = imageio.get_writer(
+                    self.outputfile,
+                    fps=self.fps,
+                    quality=int(self.opts.get("quality",8)),
+                    ffmpeg_params=["-preset", "slow"]
+                )
             if data is not None:
                 with self.l:
                     self.output.append_data(data)
@@ -121,9 +126,12 @@ class DumpToFile(VideoSupplier):
                     out_data = np.copy(out_data)
                     out_data -= self.inputs[0].read(index=(index // self.keyframes) * self.keyframes)
                     out_data += 127
+                if out_data.shape[-1] == 3:
+                    out_data = cv2.cvtColor(out_data, cv2.COLOR_RGB2BGR)
+                elif out_data.shape[-1] == 4:
+                    out_data = cv2.cvtColor(out_data, cv2.COLOR_RGBA2BGRA)
                 image_encoded = \
-                    cv2.imencode(f'.{filetype}', cv2.cvtColor(out_data, cv2.COLOR_RGB2BGR) if out_data.shape[2] == 3 else out_data,
-                                 encode_param)[1].tobytes()
+                    cv2.imencode(f'.{filetype}', out_data, encode_param)[1].tobytes()
                 with self.l:
                     self.output.writestr(img_name, image_encoded)
             elif filetype == "svg":
@@ -187,10 +195,13 @@ class DumpToFile(VideoSupplier):
                                *quality,
                                self.outputfile]
                     logger.log(logging.INFO, f"{' '.join(command)}")
-                    self.pipe = sp.Popen(command, stdin=sp.PIPE, stderr=sp.STDOUT, bufsize=1000, preexec_fn=os.setpgrp)
+                    self.pipe = sp.Popen(command, stdin=sp.PIPE, stderr=sp.STDOUT, bufsize=2*20, preexec_fn=os.setpgrp)
                 assert self.shape == data.shape
                 assert data.dtype == np.uint8
                 self.pipe.stdin.write(data.tobytes())
+                self.pipe.stdin.flush()
+        else:
+            raise Exception(f"Unknown output type {self.type}")
         self.last_index = index
 
     def read(self, index, force_type=np):
