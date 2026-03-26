@@ -46,11 +46,25 @@ class SVidReader(VideoSupplier):
             del self.mdata["sensor"]["_io"]
         else:
             self.reader.n_frames = self.vprops.shape[0]
+            if self.reader.n_frames == 0:
+                duration = self.mdata.get("DURATION")
+                fps = self.mdata.get("fps")
+
+                if duration and fps:
+                    h, m, s = duration.split(":")
+                    total_seconds = int(h) * 3600 + int(m) * 60 + float(s)
+                    self.reader.n_frames = int(round(total_seconds * fps))
+                else:
+                    # Fallback: count manually (slower)
+                    count = 0
+                    for _ in self.reader:
+                        count += 1
+                    self.reader.n_frames = count
         if cache is None:
             self.reader.get_key_indices = lambda : None
             self.reader = ImageCache(self.reader, maxcount=500)
         elif cache != False:
-            cache.inputs = (reader,)
+            cache.inputs = (self.reader,)
             self.reader = cache
 
         if pipe >= 0:
@@ -78,6 +92,9 @@ class SVidReader(VideoSupplier):
     def __del__(self):
         self.close()
 
+    def get_fps(self):
+        return self.mdata.get("fps")
+
     def close(self, recursive=False):
         self.reader.close()
 
@@ -98,7 +115,7 @@ class SVidReader(VideoSupplier):
         tries = 0
         while imghash != fr_hash:
             cur_fr_idx = self.hashes.index(imghash)
-            logger.log(logging.WARNING, f"SVidReader: Wanted {fr_idx}, tryed {requ_idx}, got {cur_fr_idx},", end="")
+            logger.log(logging.WARNING, f"SVidReader: Wanted {fr_idx}, tryed {requ_idx}, got {cur_fr_idx},")
             self.has_issues = True
             if tries > 5:
                 logger.log(logging.ERROR, "quitting")

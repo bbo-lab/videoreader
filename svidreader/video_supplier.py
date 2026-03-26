@@ -58,6 +58,11 @@ class VideoSupplier:
                     input.close(recursive=recursive)
         self.inputs = None
 
+    def get_fps(self):
+        if len(self.inputs) == 0:
+            return None
+        return self.inputs[0].get_fps()
+
     def get_key_indices(self):
         return self.inputs[0].get_key_indices()
 

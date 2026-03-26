@@ -21,6 +21,8 @@ class DecordVideoReader(VideoSupplier):
         self.last_index = 0
         self.t.start()
 
+    def get_fps(self):
+        return self.vr.get_avg_fps()
 
     def seek_end(self):
         while(not self.closed):

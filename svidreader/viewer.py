@@ -171,7 +171,7 @@ class MatplotlibViewer(VideoSupplier):
                         match str(self.comboBoxCopyToClipboard.currentText()):
                             case 'Coordinate':
                                 import pyperclip
-                                pyperclip.copy(",".join([str(p) for p in (mouse_point.x(), mouse_point.y())]))
+                                pyperclip.copy(",".join([f"{p:.2f}" for p in (mouse_point.x(), mouse_point.y())]))
                             case 'Value':
                                 pass
 

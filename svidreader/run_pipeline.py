@@ -102,7 +102,11 @@ def main():
     if args.output is not None:
         if args.output.endswith('.txt') or args.output.endswith('.csv'):
             outputfile = open(args.output, 'w')
-        elif args.output.endswith('.mp4') or args.output.endswith('.zip') or args.output.endswith('.tif') or args.output.endswith('.tiff'):
+        elif (args.output.endswith('.mp4') or
+              args.output.endswith('.mkv') or
+              args.output.endswith('.zip') or
+              args.output.endswith('.tif') or
+              args.output.endswith('.tiff')):
             from svidreader.dump_to_file import DumpToFile
             dump_options = {}
             if args.encoder is not None:
@@ -133,7 +137,7 @@ def main():
                         os.makedirs(os.path.dirname(args.output.format(index)), exist_ok=True)
                         iio.imwrite(args.output.format(index), img)
 
-            FrameIterator(process_frame(out), jobs=int(1 if args.output.endswith(".mp4") else args.jobs), force_type=np, iterator=frames).run(
+            FrameIterator(process_frame(out), jobs=int(1 if args.output.endswith(".mp4") or args.output.endswith(".mkv") else args.jobs), force_type=np, iterator=frames).run(
                 return_result=False, show_progress=True)
         except Exception:
             out.close()
