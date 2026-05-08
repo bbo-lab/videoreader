@@ -25,7 +25,7 @@ class GuiApplication:
                 break
             if tmp == "runqt":
                 if self.app is None:
-                    from PyQt5.QtWidgets import QApplication
+                    from PyQt6.QtWidgets import QApplication
                     self.app = QApplication([])
                     print("app_set")
             else:

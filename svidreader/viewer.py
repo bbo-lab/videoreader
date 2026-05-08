@@ -91,16 +91,14 @@ class MatplotlibViewer(VideoSupplier):
                 self.redraw(source=self.slider_frame)
 
             def run_qt():
-                from PyQt5.QtCore import Qt
-                from PyQt5.QtSvg import QSvgWidget
-                from PyQt5 import QtSvg
-                from PyQt5 import QtWidgets
-                from PyQt5.QtGui import QImage, QPainter
-                from PyQt5.QtWidgets import QApplication, QVBoxLayout, QHBoxLayout, QLineEdit, QWidget, QSlider, QComboBox, QPushButton, QButtonGroup
+                from PyQt6.QtCore import Qt
+                from PyQt6 import QtSvg
+                from PyQt6.QtGui import QImage, QPainter
+                from PyQt6.QtWidgets import QApplication, QVBoxLayout, QHBoxLayout, QLineEdit, QWidget, QSlider, QComboBox, QPushButton, QButtonGroup
                 from pyqtgraph import PlotWidget, plot
                 import pyqtgraph as pg
                 import os
-                from PyQt5.QtCore import QTimer
+                from PyQt6.QtCore import QTimer
                 self.__enter__()
                 viewer = self
 
@@ -128,8 +126,8 @@ class MatplotlibViewer(VideoSupplier):
                     self.svg_renderer= QtSvg.QSvgRenderer()
                     self.svg_renderer.load(current_frame.encode("utf-8"))
                     #svg_size = svg_renderer.defaultSize()
-                    import PyQt5.QtCore
-                    svg_size = PyQt5.QtCore.QSize(2048,2048)
+                    import PyQt6.QtCore
+                    svg_size = PyQt6.QtCore.QSize(2048,2048)
                     print(svg_size)
                     self.svg_image = QImage(svg_size, QImage.Format_ARGB32)
                     self.svg_image.fill(0)  # Transparent background
@@ -147,7 +145,7 @@ class MatplotlibViewer(VideoSupplier):
                 self.updating = False
                 self.graphWidget.addItem(self.img)
 
-                self.slider_frame = QSlider(Qt.Horizontal)
+                self.slider_frame = QSlider(Qt.Orientation.Horizontal)
                 self.slider_frame.setMinimum(0)
                 self.slider_frame.setMaximum(self.n_frames)
                 self.slider_frame.setValue(0)

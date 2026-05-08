@@ -2,6 +2,9 @@ import unittest
 from svidreader import filtergraph
 import numpy as np
 from svidreader.video_supplier import VideoSupplier
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class DummyIndexVideo(VideoSupplier):
@@ -41,12 +44,7 @@ class TestFilterFunctions(unittest.TestCase):
             starttime = time.time()
             for i in range(1, 301):
                 reader.get_data(i)
-            print("ran at ", 300 / (time.time() - starttime), "fps")
-
-            starttime = time.time()
-            for frame in reader:
-                reader.get_data(i)
-            print("ran at ", len(reader) / (time.time() - starttime), "fps")
+            logger.log(logging.INFO, f"analyze ran at {300 / (time.time() - starttime)} fps")
 
     def test_iterator(self):
         reader = DummyIndexVideo(num_frames=10)

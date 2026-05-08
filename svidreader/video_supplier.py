@@ -12,13 +12,14 @@ class ARRAY_MODULE_BEHAVIOR(Enum):
 
 
 class VideoSupplier:
-    def __init__(self, n_frames, inputs=()):
+    def __init__(self, n_frames, inputs=(), fps=None):
         self.inputs = inputs
         self.n_frames = n_frames
         self.shape = None
         self.default_array_module = np
         self.is_alive = True
         self.num_entered = 0
+        self.fps = fps
 
     def __iter__(self):
         return VideoIterator(reader=self)
@@ -59,6 +60,8 @@ class VideoSupplier:
         self.inputs = None
 
     def get_fps(self):
+        if self.fps is not None:
+            return self.fps
         if len(self.inputs) == 0:
             return None
         return self.inputs[0].get_fps()

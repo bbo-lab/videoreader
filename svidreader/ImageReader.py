@@ -123,7 +123,7 @@ class ImageRange(VideoSupplier):
                 self.frames = np.arange(file_size * 8 // (self.depth * self.width * self.height))
                 self.filetype = ImageType.RAW
             elif is_image(folder_file):
-                if folder_file.endswith('.tif'):
+                if folder_file.endswith('.tif') or folder_file.endswith('.tiff'):
                     #self.imagefile = imageio.mimread(folder_file)
                     import tifffile
                     with tifffile.TiffFile(folder_file) as tif:
@@ -198,8 +198,11 @@ class ImageRange(VideoSupplier):
                     return buf.decode("utf-8")
                 np_buf = np.frombuffer(buf, np.uint8)
                 res = cv2.imdecode(np_buf, cv2.IMREAD_UNCHANGED)
-                if res.ndim == 3 and res.shape[2] == 3:
-                    res = cv2.cvtColor(res, cv2.COLOR_BGR2RGB)
+                if res.ndim == 3:
+                    if res.shape[-1] == 3:
+                        res = cv2.cvtColor(res, cv2.COLOR_BGR2RGB)
+                    elif res.shape[-1] == 4:
+                        res = cv2.cvtColor(res, cv2.COLOR_BGRA2RGBA)
                 return res
             except Exception as e:
                 raise zipfile.BadZipFile(f"Cannot read file {self.folder_file}") from e
@@ -234,4 +237,4 @@ def is_image(filename):
     return False
 
 def get_image_endings():
-    return ".png", ".exr", ".jpg", ".bmp", ".svg", "tif"
+    return ".png", ".exr", ".jpg", ".bmp", ".svg", ".tif", ".tiff"

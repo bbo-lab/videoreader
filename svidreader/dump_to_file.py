@@ -16,12 +16,14 @@ class DumpToFile(VideoSupplier):
                  makedir=False,
                  comment=None,
                  fps:numbers.Number|None=None,
-                 keep_order:bool|int=False):
+                 keep_order:bool|int=False,
+                 accept_none="warn"):
         super().__init__(n_frames=reader.n_frames, inputs=(reader,))
         if opts is None:
             opts = {}
         self.outputfile = outputfile
         self.output = None
+        self.accept_none = accept_none
         self.l = multiprocessing.Lock()
         self.pipe = None
         self.shape = None
@@ -32,7 +34,7 @@ class DumpToFile(VideoSupplier):
         if makedir:
             from pathlib import Path
             Path(outputfile).parent.mkdir(parents=True, exist_ok=True)
-        if ('encoder' in self.opts and outputfile.endswith('.mp4')) or (writer is not None and writer == "ffmpeg"):
+        if writer is not None and writer == "ffmpeg":
             self.type = "ffmpeg_movie"
         elif outputfile.endswith('.mp4') or outputfile.endswith('.mkv'):
             self.type = "movie"
@@ -79,15 +81,25 @@ class DumpToFile(VideoSupplier):
             import imageio
             if self.output is None:
                 if self.outputfile.endswith('.mp4'):
+                    logger.log(logging.INFO, f"Creating video writer for {self.outputfile} with fps {self.fps} and quality {self.opts.get('quality',8)} using imageio")
+                    encoder = self.opts.get('encoder')
+                    ffmpeg_params = []
+                    if encoder:
+                        ffmpeg_params.extend(["-vcodec", encoder])
+                    preset = self.opts.get('preset')
+                    if preset:
+                        ffmpeg_params.extend(["-preset", preset])
+                    self.shape = data.shape
                     self.output = imageio.get_writer(
                         self.outputfile,
                         fps=self.fps,
                         quality=int(self.opts.get("quality",8)),
-                        ffmpeg_params=["-preset", "slow"]
+                        ffmpeg_params=ffmpeg_params
                     )
                 elif self.outputfile.endswith('.mkv'):
                     #use lossless ffv1 codec for mkv output
                     pix_fmt = None
+                    self.shape = data.shape
                     if data.shape[-1] == 1 or data.ndim == 2:
                         if data.dtype == np.uint8:
                             pix_fmt = "gray"
@@ -114,10 +126,14 @@ class DumpToFile(VideoSupplier):
 
                         ])
             if data is not None:
+                if data.shape != self.shape:
+                    logger.log(logging.WARNING, f"Got data with shape {data.shape} for frame {index} in DumpToFile, expected {self.shape}")
                 with self.l:
                     self.output.append_data(data)
-            else:
+            elif self.accept_none == "warn":
                 logger.log(logging.WARNING, f"Got None data for frame {index} in DumpToFile, skipping")
+            elif not self.accept_none:
+                raise Exception(f"Got None data for frame {index} in DumpToFile")
         elif self.type == "csv":
             if self.mapkeys is None and isinstance(data, dict):
                 self.mapkeys = data.keys()

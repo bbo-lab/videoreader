@@ -1,4 +1,4 @@
-from decord import VideoReader, gpu
+from decord import VideoReader
 import numpy as np
 from svidreader.video_supplier import VideoSupplier
 from threading import Thread, Lock
@@ -8,12 +8,12 @@ import logging
 
 class DecordVideoReader(VideoSupplier):
     def __init__(self, filename):
-        super().__init__(n_frames=0, inputs=())
+        vr = VideoReader(filename)
+        super().__init__(n_frames=len(vr), inputs=())
         self.closed = False
         self.filename = filename
         self.video = filename
-        self.vr = VideoReader(filename)
-        self.n_frames = len(self.vr)
+        self.vr = vr
         self.count = 0
         self.t = Thread(target=self.seek_end)
         self.mutex = Lock()
@@ -25,7 +25,7 @@ class DecordVideoReader(VideoSupplier):
         return self.vr.get_avg_fps()
 
     def seek_end(self):
-        while(not self.closed):
+        while not self.closed:
             time.sleep(1)
             with self.mutex:
                 if time.time() - self.last_read > 5:

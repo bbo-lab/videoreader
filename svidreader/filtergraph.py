@@ -16,6 +16,7 @@ from svidreader.effects import Concatenate
 from svidreader.effects import Math
 from svidreader.effects import MaxIndex
 from svidreader.effects import ChangeFramerate
+from svidreader.video_supplier import VideoSupplier
 
 
 logger = logging.getLogger(__name__)
@@ -101,7 +102,7 @@ def unescape(str):
     return result
 
 
-def get_reader(filename, backend="decord", cache=False, options=None):
+def get_reader(filename, backend="decord", cache=False, options=None) -> VideoSupplier:
     if isinstance(filename, Path):
         filename = filename.as_posix()
 
@@ -117,15 +118,22 @@ def get_reader(filename, backend="decord", cache=False, options=None):
         logger.log(logging.WARN, "Using iio backend for ccv files, ignoring backend setting")
         backend = "iio"
     from svidreader.ImageReader import get_image_endings
-    if os.path.isdir(filename) or filename.endswith(get_image_endings()) or filename.endswith('.zip') or filename.endswith('.raw') or filename.endswith('.tif'):
+    if (os.path.isdir(filename) or filename.endswith(get_image_endings()) or
+            filename.endswith('.zip') or
+            filename.endswith('.raw') or
+            filename.endswith('.tif') or
+            filename.endswith('.tiff')):
         from svidreader import ImageReader
         res = ImageReader.ImageRange(filename)
         processes = 10
     elif backend == 'iio':
         from svidreader import SVidReader
         res = SVidReader(filename, cache=False)
+    elif backend == "pyav":
+        from svidreader.videowrapper import pyav_video_wrapper
+        res = pyav_video_wrapper.PyAvVideoReader(filename)
     elif backend == 'decord':
-        from svidreader import decord_video_wrapper
+        from svidreader.videowrapper import decord_video_wrapper
         res = decord_video_wrapper.DecordVideoReader(filename)
     else:
         raise Exception('Unknown videoreader')
@@ -201,6 +209,10 @@ def create_filtergraph_from_string(inputs, pipeline, gui_callback=None, options=
             elif effectname == 'tblend':
                 assert len(curinputs) == 1
                 last = FrameDifference(curinputs[0])
+            elif effectname == 'motioncorrection':
+                assert len(curinputs) == 1
+                from svidreader.filter import motion_correction
+                last = motion_correction.TemplateMatchCorrected(curinputs[0])
             elif effectname == 'reader':
                 assert noinput
                 last = get_reader(effect_options['input'], backend=effect_options.get("backend", "iio"), cache=False)
@@ -315,8 +327,13 @@ def create_filtergraph_from_string(inputs, pipeline, gui_callback=None, options=
             elif effectname == "viewer":
                 assert len(curinputs) == 1
                 from svidreader.viewer import MatplotlibViewer
-                last = MatplotlibViewer(curinputs[0], backend=effect_options.get('backend', 'matplotlib'), framerate=effect_options.get('framerate', None),
-                                        gui_callback=gui_callback)
+                backend = effect_options.get('backend', 'matplotlib')
+                if backend == "nicegui":
+                    from svidreader.nicegui_viewer import NiceGUIViewer
+                    last = NiceGUIViewer(curinputs[0], framerate=effect_options.get('framerate', None), port=int(effect_options.get('port', 8080)))
+                else:
+                    last = MatplotlibViewer(curinputs[0], backend=backend, framerate=effect_options.get('framerate', None),
+                                            gui_callback=gui_callback)
             elif effectname == "dump":
                 assert len(curinputs) == 1
                 from svidreader.dump_to_file import DumpToFile
