@@ -59,7 +59,7 @@ def main():
     parser.add_argument('--encoder', default=None)
     parser.add_argument('--fps', default=None, type=int)
     parser.add_argument('-j', '--jobs', default=1, type=int)
-    parser.add_argument('-vr', '--videoreader', default='iio', choices=('iio', 'decord'))
+    parser.add_argument('-vr', '--videoreader', default='iio', choices=('iio', 'decord', 'pyav'))
     parser.add_argument('-ac', '--autocache', default='True', choices=('True', 'False'))
     parser.add_argument('-mp', '--matplotlib', action='store_true', default=False, help='Activate Matplotlib')
     parser.add_argument('-d', '--debug', help="Print lots of debugging statements", action="store_const",
@@ -127,18 +127,30 @@ def main():
     else:
         frames = range(out.n_frames) if args.frames is None else args.frames
         try:
+            headline = None
             @effects.video_functional
             def process_frame(img, index):
                 if args.output is not None:
                     if outputfile is not None:
-                        outputfile.write(f"{index} {' '.join(map(str, np.asarray([img]).flatten()))}\n")
+                        if args.output.endswith('.csv') and isinstance(img, dict):
+                            nonlocal headline
+                            if headline is None:
+                                headline = img.keys()
+                                outputfile.write(f"index,{','.join(headline)}\n")
+                            img = {k: img[k] for k in headline}
+                            outputfile.write(f"{index},{','.join(map(str, img.values()))}\n")
+                        else:
+                            outputfile.write(f"{index} {' '.join(map(str, np.asarray([img]).flatten()))}\n")
                     elif args.output.endswith('.png'):
                         from imageio import v3 as iio
                         os.makedirs(os.path.dirname(args.output.format(index)), exist_ok=True)
                         iio.imwrite(args.output.format(index), img)
 
-            FrameIterator(process_frame(out), jobs=int(1 if args.output.endswith(".mp4") or args.output.endswith(".mkv") else args.jobs), force_type=np, iterator=frames).run(
-                return_result=False, show_progress=True)
+            FrameIterator(
+                process_frame(out),
+                jobs=int(1 if args.output.endswith(".mp4") or args.output.endswith(".mkv") else args.jobs),
+                force_type=np,
+                iterator=frames).run(return_result=False, show_progress=True)
         except Exception:
             out.close()
             raise
