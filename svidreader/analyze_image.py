@@ -37,7 +37,6 @@ class AnalyzeImage(VideoSupplier):
         if self.lib == 'cupy':
             import cupy as cp
             self.sqnorm = cp.fuse(sqnorm(cp))
-            self.convolve = AnalyzeImage.get_convolve(cp, cupyx.scipy.ndimage)
             self.xp = cp
         elif self.lib == 'jax':
             import jax
@@ -53,8 +52,8 @@ class AnalyzeImage(VideoSupplier):
             self.xp = np
 
 
-    def read(self, index):
-        img = self.inputs[0].read(index=index, force_type=self.xp)
+    def read(self, index, force_type=None):
+        img = self.inputs[0].read(index=index, force_type=self.xp if force_type is None else force_type)
         if self.lib == 'nb':
             import numba as nb
             contrast, brightness = analyze(img.astype(self.xp.float32))
