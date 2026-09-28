@@ -17,12 +17,25 @@ class DumpToFile(VideoSupplier):
                  comment=None,
                  fps:numbers.Number|None=None,
                  keep_order:bool|int=False,
-                 accept_none="warn"):
+                 accept_none="warn",
+                 temporary_first=False):
         super().__init__(n_frames=reader.n_frames, inputs=(reader,))
         if opts is None:
             opts = {}
         self.outputfile = outputfile
         self.output = None
+        self.temporary_first = temporary_first
+
+
+        if temporary_first:
+            # get a temporary file in the same directory as the output file
+            import tempfile
+            import os
+            temp_dir = os.path.dirname(self.outputfile)
+            self.outputfile_tmp = tempfile.NamedTemporaryFile(delete=False, dir=temp_dir, suffix=f"_tmp{os.path.splitext(self.outputfile)[1]}")
+        else:
+            self.outputfile_tmp = self.outputfile
+
         self.accept_none = accept_none
         self.l = multiprocessing.Lock()
         self.pipe = None
@@ -66,15 +79,47 @@ class DumpToFile(VideoSupplier):
         return False
 
     def close(self, recursive=False):
-        logger.log(logging.DEBUG, f"Closing filewrite {self.outputfile}")
-        super().close(recursive=recursive)
-        if self.output is not None:
-            self.output.close()
-            self.output = None
-        if self.pipe is not None:
-            self.pipe.stdin.close()
-            self.pipe.wait()
-            self.pipe = None
+        if self.is_alive:
+            logger.log(logging.DEBUG, f"Closing filewrite {self.outputfile}")
+            super().close(recursive=recursive)
+            if self.output is not None:
+                self.output.close()
+                self.output = None
+            if self.pipe is not None:
+                self.pipe.stdin.close()
+                self.pipe.wait()
+                self.pipe = None
+            if self.outputfile != self.outputfile_tmp and self.temporary_first:
+                import os
+                os.rename(self.outputfile_tmp.name, self.outputfile)
+
+    @staticmethod
+    def encode_image(
+            image: np.ndarray,
+            filetype: str,
+            encode_param=None):
+        """
+        Encode an image to bytes.
+
+        Uses OpenCV for PNG and, when available, EXR.
+        Falls back to imagecodecs for EXR when OpenCV has no EXR writer.
+        """
+        filetype = filetype.lower()
+        import cv2
+        if cv2.haveImageWriter(f'.{filetype}'):
+            if image.shape[-1] == 3:
+                image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
+            elif image.shape[-1] == 4:
+                image = cv2.cvtColor(image, cv2.COLOR_RGBA2BGRA)
+            ok, image_encoded = cv2.imencode(f'.{filetype}', image, encode_param)
+            return image_encoded.tobytes()
+
+        if filetype == "exr":
+            import imagecodecs
+            output = imagecodecs.exr_encode(image)
+            return output
+
+        raise ValueError(f"Unsupported image type: {filetype}")
 
     def write(self, index, data):
         if self.type == "movie":
@@ -152,7 +197,7 @@ class DumpToFile(VideoSupplier):
             if self.output is None:
                 with self.l:  #Double check to make sure file was not created in the meantime
                     if self.output is None:
-                        self.output = zipfile.ZipFile(self.outputfile, mode="w", compression=zipfile.ZIP_STORED)
+                        self.output = zipfile.ZipFile(self.outputfile_tmp, mode="w", compression=zipfile.ZIP_STORED)
                         self.keyframes = self.opts.get('keyframes', 1)
                         info = {'keyframes': self.keyframes}
                         self.output.writestr("info.yaml", yaml.dump(info))
@@ -164,22 +209,20 @@ class DumpToFile(VideoSupplier):
             elif out_data.dtype == np.float32 or out_data.dtype == np.float64:
                 filetype = "exr"
                 if out_data.dtype == np.float64:
-                    out_data = out_data.astype(np.float32)
+                    out_data = out_data.astype(np.float32, copy=False)
             else:
                 raise Exception(f"Datatype not understood {type(out_data)}")
             img_name = f"{index:06d}.{filetype}"
             if filetype == "png" or filetype == "exr":
-                encode_param = [int(cv2.IMWRITE_PNG_COMPRESSION), 9]
+                if filetype == "png":
+                    encode_param = [int(cv2.IMWRITE_PNG_COMPRESSION), 9]
+                elif filetype == "exr":
+                    encode_param = [cv2.IMWRITE_EXR_COMPRESSION,cv2.IMWRITE_EXR_COMPRESSION_PIZ]
                 if index % self.keyframes != 0:
                     out_data = np.copy(out_data)
                     out_data -= self.inputs[0].read(index=(index // self.keyframes) * self.keyframes)
                     out_data += 127
-                if out_data.shape[-1] == 3:
-                    out_data = cv2.cvtColor(out_data, cv2.COLOR_RGB2BGR)
-                elif out_data.shape[-1] == 4:
-                    out_data = cv2.cvtColor(out_data, cv2.COLOR_RGBA2BGRA)
-                image_encoded = \
-                    cv2.imencode(f'.{filetype}', out_data, encode_param)[1].tobytes()
+                image_encoded = DumpToFile.encode_image(out_data, filetype, encode_param)
                 with self.l:
                     self.output.writestr(img_name, image_encoded)
             elif filetype == "svg":
