@@ -225,6 +225,11 @@ def create_filtergraph_from_string(inputs, pipeline, gui_callback=None, options=
                 assert len(curinputs) == 1
                 import svidreader.filter.flow as flow
                 last = flow.OpticFlow(curinputs[0])
+            elif effectname == 'interpolate':
+                assert len(curinputs) == 1
+                from svidreader.filter import interpolate_film
+                #last = interpolate_cv.InterpolateCV(curinputs[0], multiplier=float(effect_options.get('multiplier', 1)))
+                last = interpolate_film.FILMInterpolation(curinputs[0])
             elif effectname == 'permutate':
                 assert len(curinputs) == 1
                 last = PermutateFrames(reader=curinputs[0],
@@ -251,6 +256,10 @@ def create_filtergraph_from_string(inputs, pipeline, gui_callback=None, options=
                 assert len(curinputs) == 1
                 from svidreader.effects import Image2Text
                 last = Image2Text(curinputs[0])
+            elif effectname == "integral_downsample":
+                assert len(curinputs) == 1
+                from svidreader.filter.downsample_resolution import DownsampleResolution
+                last = DownsampleResolution(curinputs[0], factor=int(effect_options.get('factor', 2)))
             elif effectname == "light_detector":
                 assert len(curinputs) == 1
                 from svidreader.light_detector import LightDetector
@@ -259,7 +268,7 @@ def create_filtergraph_from_string(inputs, pipeline, gui_callback=None, options=
                 from svidreader.mask_unfocused import NormalizedContrast
                 last = NormalizedContrast(curinputs[0])
             elif effectname == "radial_contrast":
-                from svidreader.local_radial import RadialContrast
+                from svidreader.filter.radial_contrast import RadialContrast
                 last = RadialContrast(curinputs[0])
             elif effectname == "const":
                 assert len(curinputs) == 1
@@ -328,11 +337,17 @@ def create_filtergraph_from_string(inputs, pipeline, gui_callback=None, options=
                 assert len(curinputs) == 1
                 from svidreader.viewer import MatplotlibViewer
                 backend = effect_options.get('backend', 'matplotlib')
+                limit_coords = effect_options.get('limit_coords', None)
+                if limit_coords is not None:
+                    limit_coords = [int(x) for x in limit_coords.split('x')]
                 if backend == "nicegui":
                     from svidreader.nicegui_viewer import NiceGUIViewer
                     last = NiceGUIViewer(curinputs[0], framerate=effect_options.get('framerate', None), port=int(effect_options.get('port', 8080)))
                 else:
-                    last = MatplotlibViewer(curinputs[0], backend=backend, framerate=effect_options.get('framerate', None),
+                    last = MatplotlibViewer(curinputs[0],
+                                            backend=backend,
+                                            framerate=effect_options.get('framerate', None),
+                                            limit_coords=limit_coords,
                                             gui_callback=gui_callback)
             elif effectname == "dump":
                 assert len(curinputs) == 1
