@@ -3,8 +3,9 @@ import logging
 from svidreader.video_supplier import VideoSupplier
 import numpy as np
 import inspect
-logger = logging.getLogger(__name__)
 
+logger = logging.getLogger(__name__)
+from typing import Callable, Optional, Any
 
 class MotionBlur(VideoSupplier):
     def __init__(self, inputs, weights):
@@ -105,6 +106,8 @@ class Arange(VideoSupplier):
         self.ncols = ncols
 
     def read(self, index, force_type=np):
+        if force_type is None:
+            force_type = np
         grid = [[]]
         maxdim = np.zeros(shape=(3,), dtype=int)
         for r in self.inputs:
@@ -113,12 +116,13 @@ class Arange(VideoSupplier):
             img = r.read(index=index, force_type=force_type)
             grid[-1].append(img)
             maxdim = np.maximum(maxdim, img.shape)
-        res = np.zeros(shape=(maxdim[0] * len(grid), maxdim[1] * len(grid[0]), maxdim[2]), dtype=grid[0][0].dtype)
+
+        res = force_type.zeros(shape=(maxdim[0] * len(grid), maxdim[1] * len(grid[0]), maxdim[2]), dtype=grid[0][0].dtype)
         for col in range(len(grid)):
             for row in range(len(grid[col])):
                 img = grid[col][row]
                 res[col * maxdim[0]: col * maxdim[0] + img.shape[0],
-                row * maxdim[1]: row * maxdim[1] + img.shape[1]] = img
+                row * maxdim[1]: row * maxdim[1] + img.shape[1]] = self.convert(img, force_type)
         return res
 
 
@@ -244,7 +248,7 @@ def video_generator(num_frames):
     return lambda functional: Functional([], functional, num_frames=num_frames)
 
 
-def video_functional(functional):
+def video_functional(functional)-> Callable[[Any, Optional[Any]], VideoSupplier]:
     return lambda x, y=None: Functional([x] if y is None else [x, y], functional)
 
 
@@ -266,7 +270,15 @@ class Functional(VideoSupplier):
         return self.functional(*[inp.read(index=index, force_type=force_type) for inp in self.inputs], **args)
 
 
-def to_array(reader:VideoSupplier, jobs=1, show_progress=False, iterator=None, return_result=True, reduce=None, init=None, filter=None, return_length=False):
+def to_array(reader:VideoSupplier,
+             jobs:int=1,
+             show_progress=False,
+             iterator=None,
+             return_result=True,
+             reduce=None,
+             init=None,
+             filter=None,
+             return_length=False):
     from svidreader import frame_iterator
     return frame_iterator.FrameIterator(input=reader, jobs=jobs, iterator=iterator).run(return_result=return_result, show_progress=show_progress, reduce=reduce, init=init, filter=filter, return_length=return_length)
 
