@@ -10,7 +10,31 @@ class ColorMapperFunctional:
         self.names = names
         self.source_colors = np.array(source_colors, dtype=float)
         self.destination_colors = np.array(destination_colors, dtype=float)
+
+        dim = self.source_colors.shape[1]
+        min_points = dim + 2  # required for Delaunay
+
+        # --- augment if needed ---
+        if len(self.source_colors) < min_points:
+            eps = np.average(np.std(self.source_colors, axis=0)) * 1e-5
+            n_missing = min_points - len(self.source_colors)
+
+            idx = np.arange(n_missing) % len(self.source_colors)
+            rng = np.random.default_rng(seed=42)
+
+            extra_source = self.source_colors[idx] + rng.uniform(-eps, eps, size=(n_missing, dim))
+            extra_dest = self.destination_colors[idx]
+
+            self.source_colors = np.vstack([self.source_colors, extra_source])
+            self.destination_colors = np.vstack([self.destination_colors, extra_dest])
+
+            if self.names is not None:
+                self.names = list(self.names) + [
+                    f"{self.names[i]}_dup" for i in idx
+                ]
+
         self.delaunay = Delaunay(self.source_colors)
+        self.simplex_centers = self.source_colors[self.delaunay.simplices].mean(axis=1)
 
     def __call__(self, query_colors):
         query_colors = np.asarray(query_colors, dtype=float)
@@ -36,13 +60,7 @@ class ColorMapperFunctional:
         if np.any(outside_mask):
             qc_out = query_colors[outside_mask]
 
-            # Precompute simplex centroids ONCE if you want to optimize
-            simplex_centers = self.source_colors[self.delaunay.simplices].mean(axis=1)
-
-            dists = np.linalg.norm(
-                simplex_centers[None, :, :] - qc_out[:, None, :],
-                axis=2
-            )
+            dists = np.linalg.norm(self.simplex_centers[None, :, :] - qc_out[:, None, :],axis=2)
 
             nearest_simplex = np.argmin(dists, axis=1)
 

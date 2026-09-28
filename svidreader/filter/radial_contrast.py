@@ -1,6 +1,7 @@
 from svidreader.video_supplier import VideoSupplier
 import numpy as np
 import scipy.stats as stats
+import scipy
 
 
 class RadialContrast(VideoSupplier):
