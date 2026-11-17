@@ -12,9 +12,11 @@ class DumpToFile(VideoSupplier):
                  reader,
                  outputfile,
                  writer=None,
+                 codec = None,
                  opts=None,
                  makedir=False,
                  comment=None,
+                 compute_device=1,
                  fps:numbers.Number|None=None,
                  keep_order:bool|int=False,
                  accept_none="warn",
@@ -40,10 +42,13 @@ class DumpToFile(VideoSupplier):
         self.l = multiprocessing.Lock()
         self.pipe = None
         self.shape = None
+        self.codec = codec
+        self.compute_device = compute_device
         self.fps = reader.get_fps() if fps is None else fps
         self.last_index = None
         self.keep_order = keep_order
         self.opts = opts
+        self.module = None
         if makedir:
             from pathlib import Path
             Path(outputfile).parent.mkdir(parents=True, exist_ok=True)
@@ -126,7 +131,8 @@ class DumpToFile(VideoSupplier):
             import imageio
             if self.output is None:
                 if self.outputfile.endswith('.mp4'):
-                    logger.log(logging.INFO, f"Creating video writer for {self.outputfile} with fps {self.fps} and quality {self.opts.get('quality',8)} using imageio")
+                    quality = int(self.opts.get("quality", 8))
+                    logger.log(logging.INFO, f"Creating video writer for {self.outputfile} with fps {self.fps} and quality {quality} using imageio")
                     encoder = self.opts.get('encoder')
                     ffmpeg_params = []
                     if encoder:
@@ -138,13 +144,15 @@ class DumpToFile(VideoSupplier):
                     self.output = imageio.get_writer(
                         self.outputfile,
                         fps=self.fps,
-                        quality=int(self.opts.get("quality",8)),
+                        quality=quality,
+                        macro_block_size=1,
                         ffmpeg_params=ffmpeg_params
                     )
                 elif self.outputfile.endswith('.mkv'):
                     #use lossless ffv1 codec for mkv output
                     pix_fmt = None
                     self.shape = data.shape
+                    self.dtype = data.dtype
                     if data.shape[-1] == 1 or data.ndim == 2:
                         if data.dtype == np.uint8:
                             pix_fmt = "gray"
@@ -162,19 +170,69 @@ class DumpToFile(VideoSupplier):
                             pix_fmt = "bgra64le"
                     if pix_fmt is None:
                         raise Exception(f"Unsupported data shape {data.shape} and dtype {data.dtype} for mkv output")
-                    self.output = imageio.get_writer(
-                        self.outputfile,
-                        fps=self.fps,
-                        codec='ffv1',
-                        ffmpeg_params=[
-                            "-pix_fmt", pix_fmt,
+                    #imageio doesn't support 16 right now, so then we have to use import imageio_ffmpeg
+                    if self.codec == "ffv1_vulkan":
+                        import imageio_ffmpeg as ffmpeg
+                        output_params = [
+                            "-init_hw_device", f"vulkan=vk:{self.compute_device if self.compute_device is not None else 0}",
+                            "-filter_hw_device", "vk",
+                            "-vf", f"format={pix_fmt},hwupload",
+                            "-strict", "experimental",
+                            "-level", "3",
+                        ]
+                        print(output_params)
+                        self.output = ffmpeg.write_frames(
+                            self.outputfile,
+                            size=(self.shape[1], self.shape[0]),
+                            pix_fmt_in=pix_fmt,
+                            pix_fmt_out="vulkan",
+                            fps=self.fps,
+                            codec="ffv1_vulkan",
+                            output_params=output_params,
+                            macro_block_size=1,
+                        )
+                        self.module = "imageio_ffmpeg"
+                        self.output.send(None)
+                    else:
+                        if data.dtype == np.uint16:
+                            import imageio_ffmpeg as ffmpeg
+                            self.output = ffmpeg.write_frames(
+                                self.outputfile,
+                                size=(self.shape[1], self.shape[0]),
+                                pix_fmt_in=pix_fmt,
+                                pix_fmt_out=pix_fmt,
+                                fps=self.fps,
+                                codec="ffv1",
+                                output_params=["-level", "3"])
+                            self.module = "imageio_ffmpeg"
+                            self.output.send(None)
+                        else:
+                            self.output = imageio.get_writer(
+                                self.outputfile,
+                                fps=self.fps,
+                                codec='ffv1',
+                                ffmpeg_params=[
+                                    "-pix_fmt", pix_fmt,
 
-                        ])
+                                ])
+                            self.module = "imageio"
+                self.dtype = data.dtype
+                self.shape = data.shape
+                self.last_index = None
             if data is not None:
                 if data.shape != self.shape:
                     logger.log(logging.WARNING, f"Got data with shape {data.shape} for frame {index} in DumpToFile, expected {self.shape}")
                 with self.l:
-                    self.output.append_data(data)
+                    #check that data has same shape and dtype and that the index is consecutive
+                    assert data.shape == self.shape, f"Got data with shape {data.shape} for frame {index} in DumpToFile, expected {self.shape}"
+                    assert data.dtype == self.dtype, f"Got data with dtype {data.dtype} for frame {index} in DumpToFile, expected {self.dtype}"
+                    if self.last_index is not None:
+                        assert index >= self.last_index + 1, f"Got data with index {index} for frame {index} in DumpToFile, expected index >= {self.last_index + 1}"
+                    self.last_index = index
+                    if self.module == "imageio_ffmpeg":
+                        self.output.send(data)
+                    else:
+                        self.output.append_data(data)
             elif self.accept_none == "warn":
                 logger.log(logging.WARNING, f"Got None data for frame {index} in DumpToFile, skipping")
             elif not self.accept_none:
@@ -295,7 +353,8 @@ class DumpToFile(VideoSupplier):
             raise Exception(f"Unknown output type {self.type}")
         self.last_index = index
 
-    def read(self, index, force_type=np):
+    def read(self, index, force_type=None):
         data = self.inputs[0].read(index=index, force_type=force_type)
+        data = VideoSupplier.convert(data, module=np)
         self.write(index, data)
         return data
