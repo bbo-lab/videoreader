@@ -46,6 +46,7 @@ class DumpToFile(VideoSupplier):
         self.compute_device = compute_device
         self.fps = reader.get_fps() if fps is None else fps
         self.last_index = None
+        self.dtype = None
         self.keep_order = keep_order
         self.opts = opts
         self.module = None
@@ -99,32 +100,70 @@ class DumpToFile(VideoSupplier):
                 os.rename(self.outputfile_tmp.name, self.outputfile)
 
     @staticmethod
-    def encode_image(
-            image: np.ndarray,
-            filetype: str,
-            encode_param=None):
+    def encode_image(image: np.ndarray, filetype: str, encode_param=None):
         """
         Encode an image to bytes.
-
-        Uses OpenCV for PNG and, when available, EXR.
-        Falls back to imagecodecs for EXR when OpenCV has no EXR writer.
+        Tries writers in the specified order:
+        OpenCV, OpenEXR, imagecodecs.
         """
         filetype = filetype.lower()
-        import cv2
-        if cv2.haveImageWriter(f'.{filetype}'):
-            if image.shape[-1] == 3:
-                image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
-            elif image.shape[-1] == 4:
-                image = cv2.cvtColor(image, cv2.COLOR_RGBA2BGRA)
-            ok, image_encoded = cv2.imencode(f'.{filetype}', image, encode_param)
-            return image_encoded.tobytes()
+        writers = ("cv2", "openexr", "imagecodecs")
 
-        if filetype == "exr":
-            import imagecodecs
-            output = imagecodecs.exr_encode(image)
-            return output
+        for writer in writers:
+            try:
+                if writer == "cv2":
+                    import cv2
 
-        raise ValueError(f"Unsupported image type: {filetype}")
+                    if not cv2.haveImageWriter(f'.{filetype}'):
+                        continue
+
+                    cv_image = image
+                    if image.ndim == 3 and image.shape[-1] == 3:
+                        cv_image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
+                    elif image.ndim == 3 and image.shape[-1] == 4:
+                        cv_image = cv2.cvtColor(image, cv2.COLOR_RGBA2BGRA)
+
+                    ok, encoded = cv2.imencode(f'.{filetype}', cv_image, encode_param)
+                    if ok:
+                        return encoded.tobytes()
+
+                elif writer == "openexr" and filetype == "exr":
+                    import OpenEXR
+                    import io
+
+                    img = np.ascontiguousarray(image)
+                    if img.dtype not in (np.float16, np.float32):
+                        img = img.astype(np.float32)
+
+                    if img.ndim == 2:
+                        channels = {"Y": img}
+                    elif img.ndim == 3:
+                        names = {1: ["Y"], 3: ["R", "G", "B"], 4: ["R", "G", "B", "A"]}.get(img.shape[-1])
+                        if names is None:
+                            raise ValueError(f"Unsupported channel count: {img.shape[-1]}")
+                        channels = {name: img[..., i] for i, name in enumerate(names)}
+                    else:
+                        raise ValueError(f"Unsupported image shape: {img.shape}")
+
+                    buffer = io.BytesIO()
+                    print("Write with openexr")
+                    OpenEXR.File({}, channels).write(buffer)
+                    return buffer.getvalue()
+
+                elif writer == "imagecodecs" and filetype == "exr":
+                    import imagecodecs
+
+                    img = np.ascontiguousarray(image)
+                    if img.dtype not in (np.uint8, np.uint16, np.float16, np.float32):
+                        raise ValueError(f"Unsupported dtype {img.dtype} for EXR encoding")
+                    return imagecodecs.exr_encode(img)
+
+            except Exception as e:
+                print(e)
+                logger.log(logging.WARNING, f"Failed to encode image with {writer}: {e}")
+                continue
+
+        raise RuntimeError(f"All available writers failed for image type: {filetype}")
 
     def write(self, index, data):
         if self.type == "movie":
@@ -163,6 +202,8 @@ class DumpToFile(VideoSupplier):
                             pix_fmt = "bgr0"
                         elif data.dtype == np.uint16:
                             pix_fmt = "bgr48le"
+                        elif data.dtype == np.float32:
+                            pix_fmt = "gbrpf32le"
                     elif data.shape[-1] == 4:
                         if data.dtype == np.uint8:
                             pix_fmt = "bgra"
@@ -194,7 +235,7 @@ class DumpToFile(VideoSupplier):
                         self.module = "imageio_ffmpeg"
                         self.output.send(None)
                     else:
-                        if data.dtype == np.uint16:
+                        if data.dtype == np.uint16 or data.dtype == np.float32:
                             import imageio_ffmpeg as ffmpeg
                             self.output = ffmpeg.write_frames(
                                 self.outputfile,
@@ -203,7 +244,10 @@ class DumpToFile(VideoSupplier):
                                 pix_fmt_out=pix_fmt,
                                 fps=self.fps,
                                 codec="ffv1",
-                                output_params=["-level", "3"])
+                                output_params=[
+                                    "-level", "3" if data.dtype == np.uint16 else "4",
+                                    "-strict", "experimental",
+                                ],)
                             self.module = "imageio_ffmpeg"
                             self.output.send(None)
                         else:
@@ -267,7 +311,7 @@ class DumpToFile(VideoSupplier):
             elif out_data.dtype == np.float32 or out_data.dtype == np.float64:
                 filetype = "exr"
                 if out_data.dtype == np.float64:
-                    out_data = out_data.astype(np.float32, copy=False)
+                    out_data = out_data.astype(np.float32)
             else:
                 raise Exception(f"Datatype not understood {type(out_data)}")
             img_name = f"{index:06d}.{filetype}"
@@ -280,8 +324,8 @@ class DumpToFile(VideoSupplier):
                     out_data = np.copy(out_data)
                     out_data -= self.inputs[0].read(index=(index // self.keyframes) * self.keyframes)
                     out_data += 127
-                image_encoded = DumpToFile.encode_image(out_data, filetype, encode_param)
                 with self.l:
+                    image_encoded = DumpToFile.encode_image(out_data, filetype, encode_param)
                     self.output.writestr(img_name, image_encoded)
             elif filetype == "svg":
                 self.output.writestr(img_name, out_data)
