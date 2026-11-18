@@ -135,6 +135,9 @@ def get_reader(filename, backend="decord", cache=False, options=None) -> VideoSu
     elif backend == 'decord':
         from svidreader.videowrapper import decord_video_wrapper
         res = decord_video_wrapper.DecordVideoReader(filename)
+    elif backend == 'pynv':
+        from svidreader.videowrapper import py_nv_video_wrapper
+        res = py_nv_video_wrapper.PyNvVideoCodecReader(filename)
     else:
         raise Exception('Unknown videoreader')
     if cache:
@@ -216,11 +219,27 @@ def create_filtergraph_from_string(inputs, pipeline, gui_callback=None, options=
             elif effectname == 'reader':
                 assert noinput
                 last = get_reader(effect_options['input'], backend=effect_options.get("backend", "iio"), cache=False)
+            elif effectname == 'uint8' or effectname == 'uint16' or effectname == "float":
+                assert len(curinputs) == 1
+                from svidreader.converter import convert_to_type
+                last = convert_to_type.ConvertToType(curinputs[0], target_type=effectname)
+            elif effectname == 'cupy' or effectname == 'numpy':
+                assert len(curinputs) == 1
+                from svidreader.converter import convert_to_type
+                last = convert_to_type.ConvertToType(curinputs[0], target_module=effectname)
+            elif effectname == 'fix_overexposure':
+                assert len(curinputs) == 1
+                from svidreader.filter import fix_overexposure
+                last = fix_overexposure.FixOverexposure(
+                    curinputs[0],
+                   overexposure_boost=float(effect_options.get('overexposure_boost', 30.0)),
+                   max_value=effect_options.get('max_value', None),
+                   rtol=float(effect_options.get('rtol', 1e-6)),
+                   maxiter=effect_options.get('maxiter', None))
             elif effectname == 'gaussian':
                 assert len(curinputs) == 1
-                from svidreader.effects import GaussianBlur
-                last = GaussianBlur(curinputs[0],
-                                             sigma=float(effect_options.get('sigma', 1.0)))
+                from svidreader.filter.gaussian_blur import GaussianBlur
+                last = GaussianBlur(curinputs[0], sigma=float(effect_options.get('sigma', 1.0)))
             elif effectname == 'flow':
                 assert len(curinputs) == 1
                 import svidreader.filter.flow as flow
@@ -297,7 +316,7 @@ def create_filtergraph_from_string(inputs, pipeline, gui_callback=None, options=
                                          destination=effect_options.get('destination'))
             elif effectname == "math":
                 last = Math(curinputs, expression=effect_options.get('exp'),
-                            library=effect_options.get('library', 'numpy'))
+                            library=effect_options.get('library', None))
             elif effectname == "crop":
                 assert len(curinputs) == 1
                 logger.log(logging.WARN, "Signature changed, x and y were swapped")

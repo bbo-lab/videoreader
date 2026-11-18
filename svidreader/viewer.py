@@ -6,12 +6,13 @@ import logging
 logger = logging.getLogger(__name__)
 
 class MatplotlibViewer(VideoSupplier):
-    def __init__(self, reader, cmap=None, backend="qt", gui_callback = None, framerate=None):
+    def __init__(self, reader, cmap=None, backend="qt", gui_callback = None, framerate=None, limit_coords=None):
         super().__init__(n_frames=reader.n_frames, inputs=(reader,))
         self.backend = backend
         self.exit_event = None
         self.trigger_worker = None
         self.updating = False
+        self.limit_coords = limit_coords
         self.framerate = float(framerate) if framerate is not None else None
         self.gui_callback = gui_callback
         if backend == "matplotlib":
@@ -26,18 +27,26 @@ class MatplotlibViewer(VideoSupplier):
             self.ax_slider_frame = plt.axes([0.15, 0.0, 0.2, 0.05])
             self.ax_button_next_frame = plt.axes([0.4, 0.0, 0.1, 0.05])
             self.ax_textbox = plt.axes([0.5, 0.0, 0.1, 0.05])
+            self.ax_textbox_time = plt.axes([0.6, 0.0, 0.1, 0.05])
 
             self.button_previous_frame =  Button(ax=self.ax_button_previous_frame, label="<", color='pink', hovercolor='tomato')
             self.slider_frame = Slider(ax=self.ax_slider_frame,label='',valmin=0,valmax=reader.n_frames - 1,valinit=0)
             self.button_next_frame =  Button(ax=self.ax_button_next_frame, label=">", color='pink', hovercolor='tomato')
             self.textbox_frame = TextBox(ax=self.ax_textbox, label='', initial='0')
-            self.textbox_time = TextBox(ax=self.ax_textbox, label='', initial='0')
+            self.textbox_time = TextBox(ax=self.ax_textbox_time, label='', initial='0')
+
+            def submit_textbox_frame(val):
+                self.read(int(val), source=self.textbox_frame)
+
+            def submit_textbox_time(val):
+                if self.framerate is not None:
+                    self.read(int(round(float(val) * self.framerate)), source=self.textbox_time)
 
             self.slider_frame.on_changed(self.submit_slider)
             self.button_previous_frame.on_clicked(self.previous_frame)
             self.button_next_frame.on_clicked(self.next_frame)
-            self.textbox_frame.on_submit(self.submit_textbox_frame)
-            self.textbox_time.on_submit(self.submit_textbox_time)
+            self.textbox_frame.on_submit(submit_textbox_frame)
+            self.textbox_time.on_submit(submit_textbox_time)
             self.frame = 0
             self.updating = False
             self.th = None
@@ -51,6 +60,7 @@ class MatplotlibViewer(VideoSupplier):
                 self.updating = True
                 if current_frame is None:
                     current_frame = self.read(self.frame)
+                    current_frame = self.convert(current_frame, np)
                 if source != self.slider_frame:
                     self.slider_frame.setValue(self.frame)
                 if source != self.textbox_frame:
@@ -94,8 +104,7 @@ class MatplotlibViewer(VideoSupplier):
                 from PyQt6.QtCore import Qt
                 from PyQt6 import QtSvg
                 from PyQt6.QtGui import QImage, QPainter
-                from PyQt6.QtWidgets import QApplication, QVBoxLayout, QHBoxLayout, QLineEdit, QWidget, QSlider, QComboBox, QPushButton, QButtonGroup
-                from pyqtgraph import PlotWidget, plot
+                from PyQt6.QtWidgets import QVBoxLayout, QHBoxLayout, QLineEdit, QWidget, QSlider, QComboBox, QPushButton, QButtonGroup
                 import pyqtgraph as pg
                 import os
                 from PyQt6.QtCore import QTimer
@@ -165,11 +174,14 @@ class MatplotlibViewer(VideoSupplier):
                     scene_coords = evt.scenePos()
                     if self.graphWidget.sceneBoundingRect().contains(scene_coords):
                         mouse_point = vb.mapSceneToView(scene_coords)
-                        print(f'{self.frame}: [{mouse_point.x()}, {mouse_point.y()}]')
+                        coords = (mouse_point.x(), mouse_point.y())
+                        if self.limit_coords is not None:
+                            coords = np.asarray(coords) % self.limit_coords
+                        print(f'{self.frame}: [{coords[0]:.2f}, {coords[1]:.2f}]')
                         match str(self.comboBoxCopyToClipboard.currentText()):
                             case 'Coordinate':
                                 import pyperclip
-                                pyperclip.copy(",".join([f"{p:.2f}" for p in (mouse_point.x(), mouse_point.y())]))
+                                pyperclip.copy(",".join([f"{p:.2f}" for p in coords]))
                             case 'Value':
                                 pass
 
