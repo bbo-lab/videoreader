@@ -23,37 +23,6 @@ class MotionBlur(VideoSupplier):
         return result
 
 
-class GaussianBlur(VideoSupplier):
-    fallback = False
-
-    def __init__(self, reader, sigma=1):
-        super().__init__(n_frames=reader.n_frames, inputs=(reader,))
-        self.sigma = sigma
-
-    def read(self, index, force_type=np):
-        img = self.inputs[0].read(index=index, force_type=force_type)
-        xp = inspect.getmodule(type(img))
-
-        if xp == np:
-            from scipy.ndimage import gaussian_filter
-            result = gaussian_filter(img, sigma=self.sigma, axes=(0, 1))
-        else:
-            if not GaussianBlur.fallback:
-                from cupy.cuda.compiler import CompileException
-                try:
-                    from cupyx.scipy.ndimage import gaussian_filter
-                    result = xp.stack([gaussian_filter(img[..., i], sigma=self.sigma) for i in range(img.shape[2])], axis=-1)
-                except CompileException as e:
-                    logger.log(logging.WARNING, "Falling back to numpy for Gaussian blur due to compilation error:", e)
-                    GaussianBlur.fallback = True
-            if GaussianBlur.fallback:
-                from scipy.ndimage import gaussian_filter
-                img = VideoSupplier.convert(img, np)
-                result_np = gaussian_filter(img, sigma=self.sigma, axes=(0, 1))
-                result = VideoSupplier.convert(result_np, force_type)
-        return result
-
-
 class Image2Text(VideoSupplier):
     def __init__(self, reader):
         super().__init__(n_frames=reader.n_frames, inputs=(reader,))
@@ -335,9 +304,11 @@ class MaskAlpha(VideoSupplier):
         return img
 
 class Math(VideoSupplier):
-    def __init__(self, reader, expression, library='numpy'):
+    def __init__(self, reader, expression, library=None):
         super().__init__(n_frames=reader[0].n_frames, inputs=reader)
-        if library == 'numpy':
+        if library is None:
+            self.xp = None
+        elif library == 'numpy':
             self.xp = np
         elif library == 'cupy':
             import cupy as cp
@@ -346,20 +317,26 @@ class Math(VideoSupplier):
             import jax
             self.xp = jax.numpy
         else:
-            raise Exception('Library ' + library + ' not known')
+            raise Exception(f'Library {library} not known')
         self.exp = compile(expression, '<string>', 'exec')
 
     @staticmethod
     def name():
         return "math"
 
-    def read(self, index, force_type=np):
-        args = {f'i{i}': self.inputs[i].read(index=index, force_type=self.xp) for i in range(len(self.inputs))}
+    def read(self, index, force_type=None):
+        force_call_type = self.xp if self.xp is None else force_type
+        args = {f'i{i}': self.inputs[i].read(index=index, force_type=force_call_type) for i in range(len(self.inputs))}
+        if self.xp is not None:
+            xp = self.xp
+        else:
+            xp = VideoSupplier.get_array_module(args['i0'])
         args['np'] = np
-        args['xp'] = self.xp
+        args['xp'] = xp
         ldict = {}
         exec(self.exp, args, ldict)
-        return VideoSupplier.convert(ldict['out'], force_type)
+        result = VideoSupplier.convert(ldict['out'], force_type)
+        return result
 
 
 class MaxIndex(VideoSupplier):

@@ -13,7 +13,7 @@ class FrameIterator(VideoSupplier):
         self.force_type = force_type
         self.iterator = range(self.n_frames) if iterator is None else iterator
 
-    def read(self, index, force_type=np, return_result=True):
+    def read(self, index, force_type=None, return_result=True):
         image = self.inputs[0].read(index=index, force_type=force_type)
         return image if return_result else None
 

@@ -16,7 +16,7 @@ class VideoSupplier:
         self.inputs = inputs
         self.n_frames = n_frames
         self.shape = None
-        self.default_array_module = np
+        self.default_array_module = None
         self.is_alive = True
         self.num_entered = 0
         self.fps = fps
@@ -49,7 +49,7 @@ class VideoSupplier:
         self.default_array_module = default_array_module
 
     def __getitem__(self, key):
-        return self.read(key, self.default_array_module)
+        return self.read(key, force_type=self.default_array_module)
 
     def close(self, recursive=False):
         if self.is_alive:
@@ -84,7 +84,7 @@ class VideoSupplier:
             return {}
         return self.inputs[0].get_meta_data()
 
-    def read(self, index, force_type=np):
+    def read(self, index, force_type=None):
         raise NotImplementedError("This method has to be overriden")
 
     def get_data(self, index):
@@ -111,19 +111,42 @@ class VideoSupplier:
                        F'convert {t.__module__} to {module.__name__} by {finfo.filename} line {finfo.lineno}')
         if t.__module__ == 'cupy':
             return module.array(img.get(), copy=False)
-        return module.array(img, copy=False)
+        return module.asarray(img)
 
 
     @staticmethod
-    def get_array_module(name):
-        match name:
-            case "cupy":
-                import cupy as xp
-            case "numpy":
-                import numpy as xp
-            case _:
-                raise Exception(f"{name} must be one of (cupy, numpy)")
-        return xp
+    def get_array_module(name:str|np.ndarray):
+        if isinstance(name, str):
+            match name:
+                case "cupy":
+                    import cupy as xp
+                case "numpy":
+                    import numpy as xp
+                case _:
+                    raise Exception(f"{name} must be one of (cupy, numpy)")
+            return xp
+        if isinstance(name, np.ndarray):
+            return np
+        if type(name).__module__.split(".")[0] == "cupy":
+            import cupy as xp
+            return xp
+        raise Exception(f"Could not determine array module from type {type(name)}")
+
+    @staticmethod
+    def get_array_module_name(name:str|np.ndarray) -> str:
+        if isinstance(name, str):
+            match name:
+                case "cupy":
+                    return "cupy"
+                case "numpy":
+                    return "numpy"
+                case _:
+                    raise Exception(f"{name} must be one of (cupy, numpy)")
+        if isinstance(name, np.ndarray):
+            return "numpy"
+        if type(name).__module__.split(".")[0] == "cupy":
+            return "cupy"
+        raise Exception(f"Could not determine array module from type {type(name)}")
 
 
 class VideoIterator(VideoSupplier):
