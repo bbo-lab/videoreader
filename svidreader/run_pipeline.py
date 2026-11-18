@@ -53,6 +53,7 @@ def main():
     parser = argparse.ArgumentParser(description='Process program arguments.')
     parser.add_argument('-i', '--input', nargs='*')
     parser.add_argument('-f', '--frames', nargs='*', type=int, default=None)
+    parser.add_argument("--frame-range", nargs=2, type=int, default=None)
     parser.add_argument('-o', '--output')
     parser.add_argument('-g', '--filtergraph', default=None)
     parser.add_argument('-r', '--recursive')
@@ -62,13 +63,20 @@ def main():
     parser.add_argument('-vr', '--videoreader', default='iio', choices=('iio', 'decord', 'pyav'))
     parser.add_argument('-ac', '--autocache', default='True', choices=('True', 'False'))
     parser.add_argument('-mp', '--matplotlib', action='store_true', default=False, help='Activate Matplotlib')
+    parser.add_argument("--output-codec", default=None, type=str)
+    parser.add_argument("--loglevel", default='warning', help='Provide logging level. Example --loglevel debug, default=warning')
     parser.add_argument('-d', '--debug', help="Print lots of debugging statements", action="store_const",
                         dest="loglevel", const=logging.DEBUG, default=logging.WARNING)
     parser.add_argument('-v', '--verbose', help="Be verbose", action="store_const", dest="loglevel",
                         const=logging.INFO, )
     args = parser.parse_args()
 
-    logging.basicConfig(level=args.loglevel)
+    logging.basicConfig(level=args.loglevel.upper())
+
+    if args.frame_range is not None:
+        if args.frames is not None:
+            raise Exception("Cannot specify both --frames and --frame-range")
+        args.frames = list(range(args.frame_range[0], args.frame_range[1]))
 
     files = []
     if args.input is not None:
@@ -111,11 +119,12 @@ def main():
             dump_options = {}
             if args.encoder is not None:
                 dump_options["encoder"] = args.encoder
-            if args.output.endswith('.mp4') and args.jobs > 1:
+            if (args.output.endswith('.mp4') or args.output.endswith(".mkv")) and args.jobs > 1:
                 out = imagecache.ImageCache(out, processes=args.jobs)  # Disable caching for DumpToFile
             out = DumpToFile(reader=out,
                              outputfile=args.output,
                              fps=args.fps,
+                             codec=args.output_codec,
                              opts=dump_options)
         elif not args.output.endswith('.png'):
             raise Exception("Unsupported output format")
@@ -148,8 +157,8 @@ def main():
 
             FrameIterator(
                 process_frame(out),
-                jobs=int(1 if args.output.endswith(".mp4") or args.output.endswith(".mkv") else args.jobs),
-                force_type=np,
+                jobs=int(1 if args.output is None or args.output.endswith(".mp4") or args.output.endswith(".mkv") else args.jobs),
+                force_type=None,
                 iterator=frames).run(return_result=False, show_progress=True)
         except Exception:
             out.close()
