@@ -12,7 +12,7 @@ class MajorityVote(VideoSupplier):
         self.scale = float(scale)
         self.cache = {}
         self.stack = {}
-        self.distance_function = MajorityVote.get_gauss(self.scale, xp=xp)
+        self.distance_function = {}
         self.foreground = foreground
 
     @staticmethod
@@ -26,17 +26,25 @@ class MajorityVote(VideoSupplier):
         else:
             return xp.fuse(gauss)
 
-    def add_to_stack(self, index:int) -> xp.ndarray:
+    def get_distance_function(self, xp):
+        result = self.distance_function.get(xp, None)
+        if result is None:
+            result = MajorityVote.get_gauss(self.scale, xp=xp)
+            self.distance_function[xp] = result
+        return result
+
+    def add_to_stack(self, index:int, force_type=None) -> xp.ndarray:
         if index not in self.stack:
-            self.stack[index] = self.inputs[0].read(index = index, force_type=xp)
+            self.stack[index] = self.inputs[0].read(index = index, force_type=force_type)
         return self.stack[index]
 
-    def read(self, index, force_type=np):
+    def read(self, index, force_type=None):
         begin = max(0, index - self.window)
         end = min(index + self.window, self.n_frames)
         for i in range(begin, end):
-            self.add_to_stack(index=i)
+            self.add_to_stack(index=i, force_type=force_type)
         shape = self.stack[begin].shape[0:2]
+        distance_function = self.get_distance_function(VideoSupplier.get_array_module(self.stack[begin]))
         cache_next = {}
         should_include = np.arange(begin, end)
         for i in range(begin, end):
@@ -46,13 +54,13 @@ class MajorityVote(VideoSupplier):
                 sum = xp.array(ca[2], dtype=xp.float32, copy=True)
                 does_include = np.arange(ca[0], ca[1])
                 for j in np.setdiff1d(should_include, does_include):
-                    sum += self.distance_function(curimage, self.add_to_stack(j))
+                    sum += distance_function(curimage, self.add_to_stack(j, force_type=force_type))
                 for j in np.setdiff1d(does_include, should_include):
-                    sum -= self.distance_function(curimage, self.add_to_stack(j))
+                    sum -= distance_function(curimage, self.add_to_stack(j, force_type=force_type))
             else:
                 sum = xp.zeros(shape=shape, dtype=xp.float32)
                 for j in range(begin, end):
-                    sum += self.distance_function(curimage, self.add_to_stack(j))
+                    sum += distance_function(curimage, self.add_to_stack(j, force_type=force_type))
             cache_next[i] = (begin, end, sum)
             if i == begin:
                 best_sum = xp.copy(sum)
