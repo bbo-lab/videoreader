@@ -3,6 +3,32 @@ import numpy as np
 
 
 class MapCoordinates(VideoSupplier):
+    """
+    Remap video frames using per-pixel image coordinates.
+
+    Parameters
+    ----------
+    reader : VideoSupplier
+        Source video supplier.
+    image_points : np.ndarray or VideoSupplier
+        Coordinates used to sample the input frame. A static array must have
+        shape ``(height, width, 2)``. A per-frame VideoSupplier should provide
+        coordinates with shape ``(height, width, 2)``.
+    interpolation_order : int, default=1
+        Spline interpolation order passed to ``scipy.ndimage.map_coordinates``
+        (or its CuPy equivalent).
+
+    Returns
+    -------
+    np.ndarray or cupy.ndarray
+        The remapped frame with shape ``(height, width, channels)``. The output type follows ``force_type`` (NumPy or
+        CuPy).
+
+    Notes
+    -----
+    Coordinates are interpreted as ``(row, column)`` sampling coordinates.
+    Values outside the source image are filled with zero.
+    """
     def __init__(self, reader:VideoSupplier, image_points:np.ndarray|VideoSupplier, interpolation_order=1):
         inputs = (reader,image_points) if isinstance(image_points, VideoSupplier) else (reader,)
         super().__init__(n_frames=reader.n_frames, inputs=inputs)
@@ -43,8 +69,9 @@ class MapCoordinates(VideoSupplier):
 
 
         frame = self.inputs[0].read(index, force_type=force_type)
+        original_dtype = frame.dtype
 
-        frame = frame.astype(force_type.float32)
+        frame = frame.astype(force_type.float32, copy=False)
         frame = VideoSupplier.convert(frame, force_type)
         image_points = self.image_points
         if isinstance(image_points, VideoSupplier):
@@ -60,5 +87,6 @@ class MapCoordinates(VideoSupplier):
             range(frame.shape[2])]
 
         perspective_image = force_type.stack(perspective_image, axis=2)
-        perspective_image = self.get_image_float_to_int(xp=force_type)(perspective_image)
+        if original_dtype == np.uint8:
+            perspective_image = self.get_image_float_to_int(xp=force_type)(perspective_image)
         return perspective_image
