@@ -60,7 +60,7 @@ def shrink_by_integer_factor(img: np.ndarray, factor: int, same_output_type=True
 
 
 class DownsampleResolution(VideoSupplier):
-    def __init__(self, reader, factor):
+    def __init__(self, reader:VideoSupplier, factor: int):
         super().__init__(n_frames=(reader.n_frames), inputs=(reader,))
         self.factor = factor
 
