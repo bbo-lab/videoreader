@@ -107,7 +107,7 @@ class DumpToFile(VideoSupplier):
         OpenCV, OpenEXR, imagecodecs.
         """
         filetype = filetype.lower()
-        writers = ("cv2", "openexr", "imagecodecs")
+        writers = ("cv2", "imagecodecs", "openexr")
 
         for writer in writers:
             try:
@@ -134,20 +134,26 @@ class DumpToFile(VideoSupplier):
                     img = np.ascontiguousarray(image)
                     if img.dtype not in (np.float16, np.float32):
                         img = img.astype(np.float32)
-
                     if img.ndim == 2:
                         channels = {"Y": img}
                     elif img.ndim == 3:
                         names = {1: ["Y"], 3: ["R", "G", "B"], 4: ["R", "G", "B", "A"]}.get(img.shape[-1])
                         if names is None:
                             raise ValueError(f"Unsupported channel count: {img.shape[-1]}")
-                        channels = {name: img[..., i] for i, name in enumerate(names)}
+                        channels = {name: np.ascontiguousarray(img[..., i]) for i, name in enumerate(names)}
                     else:
                         raise ValueError(f"Unsupported image shape: {img.shape}")
 
                     buffer = io.BytesIO()
                     print("Write with openexr")
-                    OpenEXR.File({}, channels).write(buffer)
+                    file = OpenEXR.File(
+                        {
+                            "compression": OpenEXR.PIZ_COMPRESSION,
+                            "type": OpenEXR.scanlineimage,
+                        },
+                        channels,
+                    )
+                    file.write(buffer)
                     return buffer.getvalue()
 
                 elif writer == "imagecodecs" and filetype == "exr":
